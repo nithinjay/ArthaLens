@@ -98,9 +98,9 @@ The calculator must enforce issue-specific rules. These are the *generally under
 
 | # | Question | Proposed default if no answer |
 |---|---|---|
-| Q1 | Exclusion scope for already-listed Jio-named stocks in Phase 2 (see ADR-0008) | IPO scope only |
-| Q2 | Budget for a licensed exchange/market-data vendor? | No. Manual import + permitted official documents for Phase 1 |
+| Q1 | Exclusion scope for already-listed Jio-named stocks in Phase 2 (see ADR-0008) | **Resolved 2026-10-17:** IPO scope only (default accepted) |
+| Q2 | Budget for a licensed exchange/market-data vendor? | **Resolved 2026-10-17:** no vendor for Phase 1; manual import + permitted official documents (default accepted) |
 | Q3 | Is GMP wanted at all? | Feature exists, disabled by default |
 | Q4 | Will this ever be offered publicly (needs SEBI/DPDP legal review)? | Personal/learning use; legal review is a release gate |
 | Q5 | Hosting target for M11 (GCP is natural with Gemini, but AWS/Azure are fine) | GCP |
-| Q6 | Repo ownership: `/Library/WebServer/Documents/ArthaLens` is root-owned, so git reports "dubious ownership" | You run `git config --global --add safe.directory …` or `chown` the folder |
+| Q6 | Repo ownership: `/Library/WebServer/Documents/ArthaLens` is root-owned, so git reports "dubious ownership" | **Resolved:** ownership fixed; repo pushed to GitHub |

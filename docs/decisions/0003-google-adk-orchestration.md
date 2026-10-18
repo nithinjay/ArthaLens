@@ -1,6 +1,6 @@
 # ADR-0003: Google ADK as orchestration runtime behind our own port
 
-**Status:** Proposed · **Date:** 2026-10-17
+**Status:** Accepted · **Date:** 2026-10-17
 
 ## Context
 The brief requires Google ADK + Gemini, bounded agents with typed contracts, parallel sections, and bounded repair. It also requires model providers behind interfaces.

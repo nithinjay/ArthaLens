@@ -1,6 +1,6 @@
 # ADR-0012: Monorepo layout and toolchain
 
-**Status:** Proposed · **Date:** 2026-10-17
+**Status:** Accepted · **Date:** 2026-10-17
 
 ## Decision
 - **Monorepo** with the layout in [system-architecture.md §6](../architecture/system-architecture.md#6-repository-structure-planned-created-in-milestone-1). The three deployable parts sit in separate top-level directories: **`frontend/`** (React), **`backend/`** (Fastify API), **`ai/`** (Python AI service). Shared, language-neutral or TS-shared code lives in `packages/`. `docs/` stays at the root. This replaces the brief's suggested `apps/web`, `services/api` and `services/ai` nesting so each part is obvious at a glance.

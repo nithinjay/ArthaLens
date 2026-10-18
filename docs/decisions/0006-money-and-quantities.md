@@ -1,6 +1,6 @@
 # ADR-0006: Exact money arithmetic
 
-**Status:** Proposed · **Date:** 2026-10-17
+**Status:** Accepted · **Date:** 2026-10-17
 
 ## Context
 The calculator and financial metrics must never suffer floating-point errors. In JS, `0.1 + 0.2 !== 0.3`, and `Number` loses integer precision above 2^53.

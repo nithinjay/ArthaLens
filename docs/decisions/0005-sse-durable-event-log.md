@@ -1,6 +1,6 @@
 # ADR-0005: SSE backed by a durable, replayable event log
 
-**Status:** Proposed · **Date:** 2026-10-17
+**Status:** Accepted · **Date:** 2026-10-17
 
 ## Context
 Users watch research progress live. Browsers disconnect, users navigate away, and API instances restart. The work happens in a different service (AI worker) from the one that holds the HTTP connection (API).

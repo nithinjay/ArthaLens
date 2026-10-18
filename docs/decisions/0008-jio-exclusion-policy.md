@@ -1,6 +1,6 @@
 # ADR-0008: Jio exclusion: policy-as-data, layered, fail-closed
 
-**Status:** Proposed · **Date:** 2026-10-17
+**Status:** Accepted · **Date:** 2026-10-17
 
 ## Context
 The brief mandates excluding "the Jio IPO" from discovery, search, research, cached reports, calculators, jobs, notifications, API/direct access, and fixtures. Enforcement must happen server-side at the domain and retrieval layers. Ambiguous matches must be quarantined with an explanation.
@@ -64,6 +64,8 @@ Test fixtures use **synthetic** entities only. Exclusion tests use names like "J
 ## Open question (needs your decision)
 Does the exclusion extend to **already-listed Jio-named stocks** in Phase 2 watchlists/holdings (for example Jio Financial Services, which is listed and not an IPO), or to the Jio Platforms stock after it lists?
 **Proposed default:** rule scope is `ipo` only. Listed stocks are allowed in Phase 2, but any monitoring item that concerns the Jio IPO itself is quarantined. Changing this means adding `"stock"` to `scope`, which is a data change, not code.
+
+**Resolution (2026-10-17):** default accepted with Milestone 0 approval: scope is `ipo` only.
 
 ## Consequences
 - + Easy to audit; multiple independent layers; a missed layer is caught by another.

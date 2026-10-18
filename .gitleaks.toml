@@ -1,0 +1,15 @@
+# Secret scanning config (threat model T-50). Extends gitleaks' default rules.
+# Only paths that are gitignored (never committed) are skipped.
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Gitignored local files"
+paths = [
+  '''(^|/)\.env$''',
+  '''(^|/)node_modules/''',
+  '''(^|/)\.venv/''',
+  '''(^|/)dist/''',
+  '''(^|/)\.git/''',
+  '''(^|/)\.(mypy|ruff|pytest)_cache/''',
+]

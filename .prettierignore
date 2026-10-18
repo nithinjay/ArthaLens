@@ -1,0 +1,9 @@
+pnpm-lock.yaml
+**/dist
+**/generated
+packages/contracts/schemas
+docs/PROJECT_BRIEF.md
+# Docs are hand-formatted; don't reflow them.
+*.md
+ai/
+.claude/

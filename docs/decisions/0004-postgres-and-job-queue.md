@@ -1,6 +1,6 @@
 # ADR-0004: PostgreSQL as system of record and job queue; no Redis initially
 
-**Status:** Proposed · **Date:** 2026-10-17
+**Status:** Accepted · **Date:** 2026-10-17
 
 ## Context
 We need durable research jobs (minutes long, must survive restarts), scheduled monitoring (P2), rate limiting, and caching. The brief says to add Redis or other infrastructure only when justified.

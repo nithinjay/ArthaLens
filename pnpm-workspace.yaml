@@ -1,0 +1,10 @@
+packages:
+  - frontend
+  - backend
+  - packages/*
+
+# Pin exact versions in package.json (ADR-0012); the lockfile pins transitive deps.
+saveExact: true
+engineStrict: true
+allowBuilds:
+  esbuild: true

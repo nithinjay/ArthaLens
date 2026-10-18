@@ -14,12 +14,13 @@
 - [ ] AC-0.9 **User review and approval** (ADRs move to Accepted)
 
 ## Milestone 1: Foundation
-- AC-1.1 `docker compose up` starts postgres, api, ai-api, ai-worker, web from a clean clone with only `.env` copied from `.env.example`.
+- AC-1.1 `docker compose up` starts postgres, backend, ai and frontend (plus a one-shot migrate job) from a clean clone after `pnpm env:init`. *(ai-worker moves to M4, see ADR-0014.)*
 - AC-1.2 `GET /healthz` (liveness) and `/readyz` (DB reachable) return 200 on api and ai.
 - AC-1.3 API → AI internal call succeeds with the service token and fails (401) without it.
-- AC-1.4 `dbmate up` applies the initial migration. `dbmate down` then `up` succeeds again.
+- AC-1.4 Migrations apply on startup; `scripts/check-migrations.sh` proves up → full rollback → up on a throwaway database.
 - AC-1.5 Typecheck, lint and unit tests pass in both languages (commands from the architecture doc), plus contract drift check.
-- AC-1.6 gitleaks reports no secrets. `.env` is gitignored (verified with `git check-ignore .env`).
+- AC-1.6 gitleaks reports no secrets in files git would commit (`pnpm secrets:scan`). `.env` is gitignored (`git check-ignore .env`).
+- AC-1.7 Runtime DB roles are least-privilege (no DDL, append-only audit) and RLS hides other tenants' rows (`pnpm smoke`).
 
 ## Milestone 2: IPO ingestion
 - AC-2.1 SearchPort with mock + manual-import + ≥1 permitted live adapter (behind a flag).

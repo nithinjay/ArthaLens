@@ -11,3 +11,4 @@
 | [architecture/source-provider-strategy.md](architecture/source-provider-strategy.md) | Source tiers, hierarchy, freshness, adapters |
 | [security/threat-model.md](security/threat-model.md) | STRIDE + LLM threats + mitigations |
 | [decisions/](decisions/README.md) | Architecture Decision Records |
+| [runbooks/local-development.md](runbooks/local-development.md) | Setup, commands, troubleshooting |

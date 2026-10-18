@@ -1,6 +1,6 @@
 # ADR-0013: Frontend component, form and chart libraries
 
-**Status:** Proposed · **Date:** 2026-10-17
+**Status:** Accepted · **Date:** 2026-10-17
 
 ## Decision
 - **Build:** Vite + React + TypeScript (strict).

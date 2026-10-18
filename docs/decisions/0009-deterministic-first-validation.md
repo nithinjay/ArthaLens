@@ -1,6 +1,6 @@
 # ADR-0009: Deterministic-first validation and bounded repair
 
-**Status:** Proposed · **Date:** 2026-10-17
+**Status:** Accepted · **Date:** 2026-10-17
 
 ## Context
 The product's value depends on reports containing no unsupported facts. LLM self-checking is unreliable on its own.

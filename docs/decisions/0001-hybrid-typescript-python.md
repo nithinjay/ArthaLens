@@ -1,6 +1,6 @@
 # ADR-0001: Hybrid TypeScript API + Python AI service
 
-**Status:** Proposed · **Date:** 2026-10-17
+**Status:** Accepted · **Date:** 2026-10-17
 
 ## Context
 The brief prescribes React/TS on the front, Node/TS for the application API, and Python/FastAPI/ADK for AI. Two backends add cost, so the split has to pay for itself.

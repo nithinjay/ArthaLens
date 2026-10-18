@@ -1,0 +1,79 @@
+# ArthaLens local development stack.
+#   pnpm env:init            # once: creates .env with random local secrets
+#   docker compose up --build
+# Every port is bound to 127.0.0.1, so nothing is reachable from your network.
+
+name: arthalens
+
+services:
+  postgres:
+    build: ./infrastructure/docker/postgres
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?run `pnpm env:init` to create .env}
+      APP_MIGRATE_DB_PASSWORD: ${APP_MIGRATE_DB_PASSWORD:?run `pnpm env:init` to create .env}
+      APP_API_DB_PASSWORD: ${APP_API_DB_PASSWORD:?run `pnpm env:init` to create .env}
+      APP_AI_DB_PASSWORD: ${APP_AI_DB_PASSWORD:?run `pnpm env:init` to create .env}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - '127.0.0.1:${POSTGRES_HOST_PORT:-5433}:5432'
+    healthcheck:
+      # TCP check: during first-run init Postgres listens on a unix socket only,
+      # so this stays unhealthy until roles and the database exist.
+      test: ['CMD', 'pg_isready', '-h', '127.0.0.1', '-U', 'postgres', '-d', 'arthalens']
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  migrate:
+    build: ./database
+    environment:
+      DATABASE_URL: postgres://app_migrate:${APP_MIGRATE_DB_PASSWORD}@postgres:5432/arthalens?sslmode=disable
+    command: ['--migrations-dir', '/db/migrations', '--no-dump-schema', '--wait', 'up']
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  ai:
+    build: ./ai
+    environment:
+      APP_ENV: development
+      DATABASE_URL: postgresql://app_ai:${APP_AI_DB_PASSWORD}@postgres:5432/arthalens
+      AI_SERVICE_TOKEN: ${AI_SERVICE_TOKEN:?run `pnpm env:init` to create .env}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    # Published for local learning and the smoke test only. Production keeps it private.
+    ports:
+      - '127.0.0.1:8000:8000'
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    environment:
+      DATABASE_URL: postgresql://app_api:${APP_API_DB_PASSWORD}@postgres:5432/arthalens
+      AI_SERVICE_URL: http://ai:8000
+      AI_SERVICE_TOKEN: ${AI_SERVICE_TOKEN:?run `pnpm env:init` to create .env}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    ports:
+      - '127.0.0.1:3000:3000'
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      ai:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    ports:
+      - '127.0.0.1:8080:8080'
+    depends_on:
+      backend:
+        condition: service_healthy
+
+volumes:
+  pgdata:
