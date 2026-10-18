@@ -164,6 +164,48 @@ check "PDF-sourced field cites its page (Beta fresh issue → p.2)" \
 check "every verified field cites a document version" \
   "$(js "$LIST" "all(f['source']['version'] >= 1 for i in d['items'] for f in i['fields'].values() if f['status']=='verified')")" True
 
+echo "Research orchestration (Milestone 4, fake model)"
+sh scripts/seed-dev.sh >/dev/null
+R=http://127.0.0.1:3000/api/v1/research
+ALPHA_ID=$(js "$(body "$API?q=alpha")" "d['items'][0]['id']")
+KEY="smoke-$(date +%s)-$$"
+POSTED=$(mktemp)
+post() { curl -s -o "$POSTED" -w '%{http_code}' -X POST -H "Idempotency-Key: $KEY" "$1"; }
+check "POST research → 202" "$(post "$API/$ALPHA_ID/research")" 202
+RID=$(js "$(cat "$POSTED")" "d['report_id']")
+check "same Idempotency-Key → 200 with the same report" \
+  "$(post "$API/$ALPHA_ID/research")$(js "$(cat "$POSTED")" "d['report_id']==\"$RID\"")" "200True"
+STREAM=$(curl -sN --max-time 90 "http://127.0.0.1:8080/api/v1/research/$RID/events")
+LASTEV=$(printf '%s' "$STREAM" | grep '^event:' | tail -n 1 | sed 's/event: //')
+check "SSE through nginx ends with job.completed" "$LASTEV" job.completed
+IDS=$(printf '%s' "$STREAM" | grep '^id:' | sed 's/id: //' | tr '\n' ' ')
+check "SSE event ids are 1..n with no gaps" "$(python3 -c "ids=[int(x) for x in '$IDS'.split()]; print(ids==list(range(1,len(ids)+1)) and len(ids)>10)")" True
+check "resume with Last-Event-ID replays only later events" \
+  "$(curl -sN --max-time 10 -H 'Last-Event-ID: 3' "$R/$RID/events" | grep -m1 '^id:' | sed 's/id: //')" 4
+REPORT=$(body "$R/$RID")
+check "report completed (degraded until validation exists)" "$(js "$REPORT" "d['status']")" completed_degraded
+check "all ten sections present" "$(js "$REPORT" "''.join(s['section'] for s in d['sections'])")" ABCDEFGHIJ
+check "section D (deterministic) is Verified" "$(js "$REPORT" "[s['display_status'] for s in d['sections'] if s['section']=='D'][0]")" Verified
+check "no drafted claim is marked verified" \
+  "$(js "$REPORT" "any(c['status']=='verified' for s in d['sections'] if s['section'] in 'AEFJ' for c in s['claims'])")" False
+check "planned sections say Not found with a reason" \
+  "$(js "$REPORT" "all(s['display_status']=='Not found' and s['reason'] for s in d['sections'] if s['section'] in 'BCGHI')")" True
+EVID=$(body "$R/$RID/evidence")
+check "every citation label is in the report's evidence" \
+  "$(python3 -c "
+import json; r=json.loads('''$REPORT'''); e=json.loads('''$EVID''')
+labels={i['label'] for i in e['items']}
+print(all(c['label'] in labels for s in r['sections'] for cl in s['claims'] for c in cl['citations']))")" True
+check "report appears in research history" "$(js "$(body "$R")" "\"$RID\" in [i['id'] for i in d['items']]")" True
+check "usage recorded for the drafted sections" \
+  "$(adm "SELECT string_agg(section, '' ORDER BY section) FROM usage_records WHERE report_id = '$RID'")" AEFJ
+psql_as app_migrate "$APP_MIGRATE_DB_PASSWORD" "INSERT INTO ipos (id, slug, company_name, normalized_name, policy_version, exclusion_status) VALUES ('$WID','smoke-withdrawn','Smoke Withdrawn Entity','smoke withdrawn entity',1,'withdrawn_by_policy') ON CONFLICT (id) DO NOTHING" >/dev/null
+check "POST research for a policy-withdrawn IPO → 403" "$(curl -s -o /dev/null -w '%{http_code}' -X POST "$API/$WID/research")" 403
+psql_as app_migrate "$APP_MIGRATE_DB_PASSWORD" "DELETE FROM audit_events WHERE target_id='$WID'; DELETE FROM ipos WHERE id='$WID'" >/dev/null
+check "DELETE report → 204" "$(curl -s -o /dev/null -w '%{http_code}' -X DELETE "$R/$RID")" 204
+check "deleted report → 404" "$(code "$R/$RID")" 404
+rm -f "$POSTED"
+
 echo
 echo "Smoke test: $PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ]

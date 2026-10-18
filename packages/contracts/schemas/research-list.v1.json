@@ -1,0 +1,98 @@
+{
+  "$defs": {
+    "ResearchSummary": {
+      "additionalProperties": false,
+      "properties": {
+        "company_name": {
+          "title": "Company Name",
+          "type": "string"
+        },
+        "completed_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Completed At"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "id": {
+          "format": "uuid",
+          "title": "Id",
+          "type": "string"
+        },
+        "ipo_id": {
+          "format": "uuid",
+          "title": "Ipo Id",
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "pending",
+            "running",
+            "completed",
+            "completed_degraded",
+            "failed",
+            "rejected_excluded"
+          ],
+          "title": "Status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "ipo_id",
+        "company_name",
+        "status",
+        "created_at",
+        "completed_at"
+      ],
+      "title": "ResearchSummary",
+      "type": "object"
+    }
+  },
+  "$id": "https://arthalens.local/schemas/research-list.v1.json",
+  "additionalProperties": false,
+  "properties": {
+    "items": {
+      "items": {
+        "$ref": "#/$defs/ResearchSummary"
+      },
+      "title": "Items",
+      "type": "array"
+    },
+    "next_cursor": {
+      "anyOf": [
+        {
+          "maxLength": 500,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Next Cursor"
+    },
+    "schema_version": {
+      "const": "research-list.v1",
+      "default": "research-list.v1",
+      "title": "Schema Version",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_version",
+    "items",
+    "next_cursor"
+  ],
+  "title": "ResearchList",
+  "type": "object"
+}

@@ -1,0 +1,39 @@
+{
+  "$id": "https://arthalens.local/schemas/research-created.v1.json",
+  "additionalProperties": false,
+  "properties": {
+    "created": {
+      "title": "Created",
+      "type": "boolean"
+    },
+    "events_url": {
+      "title": "Events Url",
+      "type": "string"
+    },
+    "report_id": {
+      "format": "uuid",
+      "title": "Report Id",
+      "type": "string"
+    },
+    "status": {
+      "enum": [
+        "pending",
+        "running",
+        "completed",
+        "completed_degraded",
+        "failed",
+        "rejected_excluded"
+      ],
+      "title": "Status",
+      "type": "string"
+    }
+  },
+  "required": [
+    "report_id",
+    "status",
+    "events_url",
+    "created"
+  ],
+  "title": "ResearchCreated",
+  "type": "object"
+}

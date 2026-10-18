@@ -1,0 +1,33 @@
+{
+  "$id": "https://arthalens.local/schemas/research-event.v1.json",
+  "additionalProperties": false,
+  "properties": {
+    "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+    },
+    "payload": {
+      "additionalProperties": true,
+      "title": "Payload",
+      "type": "object"
+    },
+    "seq": {
+      "minimum": 1,
+      "title": "Seq",
+      "type": "integer"
+    },
+    "type": {
+      "title": "Type",
+      "type": "string"
+    }
+  },
+  "required": [
+    "seq",
+    "type",
+    "payload",
+    "created_at"
+  ],
+  "title": "ResearchEvent",
+  "type": "object"
+}

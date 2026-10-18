@@ -8,3 +8,8 @@ export {
   type FieldObservation,
   IpoDetailSchema,
 } from './generated/ipo-detail.v1.js';
+export * from './generated/research-report.v1.js';
+export * from './generated/research-list.v1.js';
+export * from './generated/research-created.v1.js';
+export * from './generated/research-event.v1.js';
+export * from './generated/research-evidence.v1.js';

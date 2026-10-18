@@ -3,10 +3,20 @@ import helmet from '@fastify/helmet';
 import swagger from '@fastify/swagger';
 import { randomUUID } from 'node:crypto';
 import type { IncomingMessage } from 'node:http';
-import { IpoDetailSchema, IpoListSchema, ServiceHealthSchema } from '@arthalens/contracts';
+import {
+  IpoDetailSchema,
+  IpoListSchema,
+  ResearchCreatedSchema,
+  ResearchEventSchema,
+  ResearchEvidenceSchema,
+  ResearchListSchema,
+  ResearchReportSchema,
+  ServiceHealthSchema,
+} from '@arthalens/contracts';
 import type { Config } from './config.js';
 import { registerProblemHandlers } from './plugins/problem.js';
 import { ipoRoutes, type IpoRouteDeps } from './ipos/routes.js';
+import { researchCreateRoute, researchRoutes, type ResearchRouteDeps } from './research/routes.js';
 import { healthRoutes, type HealthDeps } from './routes/health.js';
 import { VERSION } from './version.js';
 
@@ -24,6 +34,7 @@ export function requestIdFor(req: IncomingMessage): string {
 export interface AppDeps {
   health: HealthDeps;
   ipos: IpoRouteDeps;
+  research: ResearchRouteDeps;
 }
 
 export async function buildApp(
@@ -67,10 +78,25 @@ export async function buildApp(
   app.addSchema(ServiceHealthSchema);
   app.addSchema(IpoListSchema);
   app.addSchema(IpoDetailSchema);
+  for (const schema of [
+    ResearchReportSchema,
+    ResearchListSchema,
+    ResearchCreatedSchema,
+    ResearchEventSchema,
+    ResearchEvidenceSchema,
+  ]) {
+    app.addSchema(schema);
+  }
   registerProblemHandlers(app);
 
   await app.register(async (scope) => healthRoutes(scope, deps.health));
-  await app.register(async (scope) => ipoRoutes(scope, deps.ipos));
+  await app.register(async (scope) =>
+    ipoRoutes(scope, {
+      ...deps.ipos,
+      scoped: [...(deps.ipos.scoped ?? []), researchCreateRoute(deps.research)],
+    }),
+  );
+  await app.register(async (scope) => researchRoutes(scope, deps.research));
 
   app.get('/api/v1/openapi.json', { schema: { hide: true } }, async () => app.swagger());
 

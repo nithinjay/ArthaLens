@@ -1,0 +1,122 @@
+{
+  "$defs": {
+    "EvidenceItem": {
+      "additionalProperties": false,
+      "properties": {
+        "authority": {
+          "enum": [
+            "official_exchange",
+            "official_regulator",
+            "issuer_filing",
+            "official_registrar",
+            "licensed_market_data",
+            "credible_news",
+            "unofficial"
+          ],
+          "title": "Authority",
+          "type": "string"
+        },
+        "cited_by_claims": {
+          "minimum": 0,
+          "title": "Cited By Claims",
+          "type": "integer"
+        },
+        "document_id": {
+          "format": "uuid",
+          "title": "Document Id",
+          "type": "string"
+        },
+        "is_synthetic": {
+          "title": "Is Synthetic",
+          "type": "boolean"
+        },
+        "label": {
+          "title": "Label",
+          "type": "string"
+        },
+        "published_at": {
+          "anyOf": [
+            {
+              "format": "date",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Published At"
+        },
+        "publisher": {
+          "title": "Publisher",
+          "type": "string"
+        },
+        "retrieved_at": {
+          "format": "date-time",
+          "title": "Retrieved At",
+          "type": "string"
+        },
+        "source_type": {
+          "title": "Source Type",
+          "type": "string"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        },
+        "url": {
+          "title": "Url",
+          "type": "string"
+        },
+        "version": {
+          "title": "Version",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "label",
+        "document_id",
+        "title",
+        "publisher",
+        "url",
+        "published_at",
+        "retrieved_at",
+        "authority",
+        "source_type",
+        "version",
+        "is_synthetic",
+        "cited_by_claims"
+      ],
+      "title": "EvidenceItem",
+      "type": "object"
+    }
+  },
+  "$id": "https://arthalens.local/schemas/research-evidence.v1.json",
+  "additionalProperties": false,
+  "properties": {
+    "items": {
+      "items": {
+        "$ref": "#/$defs/EvidenceItem"
+      },
+      "title": "Items",
+      "type": "array"
+    },
+    "report_id": {
+      "format": "uuid",
+      "title": "Report Id",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "research-evidence.v1",
+      "default": "research-evidence.v1",
+      "title": "Schema Version",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_version",
+    "report_id",
+    "items"
+  ],
+  "title": "ResearchEvidence",
+  "type": "object"
+}

@@ -57,11 +57,37 @@ services:
       migrate:
         condition: service_completed_successfully
 
+  # Runs research jobs. Same image as `ai`; uses the deterministic fake model unless you set
+  # MODEL_PROVIDER=gemini with GEMINI_API_KEY and GEMINI_MODEL in .env.
+  ai-worker:
+    build:
+      context: .
+      dockerfile: ai/Dockerfile
+      target: runtime
+    command: ['python', '-m', 'arthalens_ai.research.worker']
+    environment:
+      APP_ENV: development
+      DATABASE_URL: postgresql://app_ai:${APP_AI_DB_PASSWORD}@postgres:5432/arthalens
+      MODEL_PROVIDER: ${MODEL_PROVIDER:-fake}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GEMINI_MODEL: ${GEMINI_MODEL:-}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    healthcheck:
+      disable: true # no HTTP port; the job lease is its liveness signal
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
   backend:
     build:
       context: .
       dockerfile: backend/Dockerfile
     environment:
+      # Local stack only: the dev identity is refused when NODE_ENV=production.
+      NODE_ENV: development
+      AUTH_MODE: ${AUTH_MODE:-dev}
+      DEV_TENANT_ID: ${DEV_TENANT_ID:-00000000-0000-4000-8000-000000000d01}
+      DEV_USER_ID: ${DEV_USER_ID:-00000000-0000-4000-8000-000000000d02}
       DATABASE_URL: postgresql://app_api:${APP_API_DB_PASSWORD}@postgres:5432/arthalens
       AI_SERVICE_URL: http://ai:8000
       AI_SERVICE_TOKEN: ${AI_SERVICE_TOKEN:?run `pnpm env:init` to create .env}

@@ -14,3 +14,5 @@
 | [runbooks/local-development.md](runbooks/local-development.md) | Setup, commands, troubleshooting |
 | [runbooks/ipo-ingestion.md](runbooks/ipo-ingestion.md) | Ingestion pipeline, field states, manual import |
 | [runbooks/evidence-ledger.md](runbooks/evidence-ledger.md) | Evidence tests, inspection queries, expected errors |
+| [runbooks/research.md](runbooks/research.md) | Running reports, SSE, enabling Gemini, troubleshooting |
+| [architecture/agent-contracts.md](architecture/agent-contracts.md) | Each agent's responsibility, inputs, outputs, failure behaviour, timeouts |

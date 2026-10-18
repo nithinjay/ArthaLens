@@ -4,6 +4,8 @@ import { buildApp } from './app.js';
 import { ConfigError, loadConfig } from './config.js';
 import { checkDatabase, createPool } from './db.js';
 import { PgIpoRepository } from './ipos/repository.js';
+import { PgEventHub } from './research/events.js';
+import { PgResearchRepository } from './research/repository.js';
 
 async function main(): Promise<void> {
   const config = loadConfig();
@@ -16,17 +18,27 @@ async function main(): Promise<void> {
     timeoutMs: config.DEPENDENCY_TIMEOUT_MS,
   });
 
+  const ipoRepo = new PgIpoRepository(pool);
+  const hub = new PgEventHub(config.DATABASE_URL, console);
   const app = await buildApp(config, {
     health: {
       checkDatabase: () => checkDatabase(pool),
       checkAi: (requestId) => ai.checkHealth(requestId),
     },
-    ipos: { repo: new PgIpoRepository(pool), policy },
+    ipos: { repo: ipoRepo, policy },
+    research: {
+      repo: new PgResearchRepository(pool),
+      notifier: hub,
+      policy,
+      identity: config,
+      audit: (event) => ipoRepo.audit(event),
+    },
   });
 
   const shutdown = async (signal: string): Promise<void> => {
     app.log.info({ signal }, 'shutting down');
     await app.close();
+    await hub.close();
     await pool.end();
     process.exit(0);
   };

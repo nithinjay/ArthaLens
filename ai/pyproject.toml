@@ -4,9 +4,13 @@ version = "0.1.0"
 description = "ArthaLens AI service: ingestion, evidence ledger, research orchestration, validation"
 requires-python = ">=3.13,<3.14"
 dependencies = [
-    "fastapi>=0.143.3",
+    # <0.143: google-adk 2.12 caps opentelemetry-api at 1.42.1; fastapi 0.143+ needs >=1.44.
+    "fastapi>=0.141.1,<0.143",
+    "google-adk==2.12.0",
+    "google-genai>=1.75.0",
     "httpx2>=2.13.1",
     "pillow>=13.0.0",
+    "psycopg-pool>=3.3.3",
     "psycopg[binary]>=3.3.6",
     "pydantic>=2.14.1",
     "pydantic-settings>=2.16.0",
@@ -33,6 +37,9 @@ ignore = []
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["S101", "S104", "S105", "S106"]
+# SQL strings in database tests read better unbroken.
+"tests/test_*_integration.py" = ["E501"]
+"tests/test_gemini_live.py" = ["E501"]
 
 [tool.mypy]
 python_version = "3.13"
@@ -51,6 +58,7 @@ markers = [
   "policy: exclusion-policy tests (shared vectors with TypeScript)",
   "ocr: needs the tesseract binary (runs in the ai-test container)",
   "integration: needs a migrated PostgreSQL (scripts/test-integration.sh)",
+  "live_gemini: makes a real, billed Gemini API call (opt-in)",
 ]
 
 [dependency-groups]
