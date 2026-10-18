@@ -71,6 +71,8 @@ interface SourceCols {
   retrieval_method: SourceRef['retrieval_method'] | null;
   e_synthetic: boolean | null;
   display_rights: 'full_text' | 'excerpt' | 'metadata_only' | null;
+  e_version: number | null;
+  evidence_page: number | null;
 }
 
 interface FieldRow extends SourceCols {
@@ -96,7 +98,7 @@ interface ObservationRow extends SourceCols {
 // Only citation columns: app_api has no SELECT on evidence_documents.text_content.
 const SOURCE_COLUMNS = `
   e.id AS e_id, e.canonical_url, e.title, e.publisher, e.published_at, e.authority,
-  e.retrieval_method, e.is_synthetic AS e_synthetic, e.display_rights`;
+  e.retrieval_method, e.is_synthetic AS e_synthetic, e.display_rights, e.version AS e_version`;
 
 const IPO_COLUMNS = `
   i.id, i.slug, i.company_name, i.normalized_name, i.is_synthetic,
@@ -126,17 +128,18 @@ const DETAIL_SQL = `SELECT ${IPO_COLUMNS}
  WHERE i.id = $1 AND i.exclusion_status = 'allowed'`;
 
 const OBSERVATIONS_SQL = `SELECT o.field, o.value, o.raw_value, o.evidence_quote, o.quote_verified,
-       o.parse_error, o.observed_at, ${SOURCE_COLUMNS}
+       o.parse_error, o.observed_at, o.evidence_page, ${SOURCE_COLUMNS}
   FROM ipo_field_observations o JOIN evidence_documents e ON e.id = o.evidence_id
  WHERE o.snapshot_id = $1
  ORDER BY o.field, o.id`;
 
 const FIELDS_SQL = `SELECT f.snapshot_id, f.field, f.value, f.status, f.evidence_quote, f.checked_at,
-       f.note, ${SOURCE_COLUMNS}
+       f.note, f.evidence_page, ${SOURCE_COLUMNS}
   FROM ipo_snapshot_fields f LEFT JOIN evidence_documents e ON e.id = f.evidence_id
  WHERE f.snapshot_id = ANY($1::uuid[])`;
 
 function sourceOf(row: SourceCols): SourceRef | null {
+  // The page is part of the citation: it tells a reader where to look in the original.
   if (!row.e_id) return null;
   return {
     evidence_id: row.e_id,
@@ -147,6 +150,8 @@ function sourceOf(row: SourceCols): SourceRef | null {
     authority: row.authority ?? 'unofficial',
     retrieval_method: row.retrieval_method ?? 'manual_import',
     is_synthetic: row.e_synthetic ?? false,
+    version: row.e_version ?? 1,
+    page: row.evidence_page,
   };
 }
 

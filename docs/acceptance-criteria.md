@@ -30,7 +30,7 @@
 - AC-2.5 SSRF tests: private IP, redirect to private IP, and non-allowlisted domain are all blocked.
 
 ## Milestone 3: Evidence ledger
-- AC-3.1 Evidence rows are append-only (UPDATE/DELETE denied for `app_ai` except by retention job role).
+- AC-3.1 Evidence rows are append-only: UPDATE/DELETE/TRUNCATE refused for every role, including the owner, except a DELETE in a transaction that opts in to retention purging.
 - AC-3.2 Same content fetched twice → one document version (hash dedup); stable `dN` IDs per report.
 - AC-3.3 Page-level provenance for PDFs; OCR confidence stored for scanned pages.
 - AC-3.4 Tenant-private evidence never returned to another tenant (test).

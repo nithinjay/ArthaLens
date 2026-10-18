@@ -27,14 +27,14 @@
     },
     {
       "ref": "rhp",
-      "file": "docs/beta-rhp.txt",
-      "url": "https://fixtures.arthalens.test/beta-rhp.txt",
+      "file": "docs/beta-rhp.pdf",
+      "url": "https://fixtures.arthalens.test/beta-rhp.pdf",
       "title": "[SYNTHETIC] RHP excerpt: Beta Logistics",
       "publisher": "SYNTHETIC FIXTURE (fictional issuer)",
       "published_at": "2026-10-14",
       "authority": "issuer_filing",
       "source_type": "offer_document",
-      "mime_type": "text/plain"
+      "mime_type": "application/pdf"
     }
   ],
   "fields": {
@@ -73,9 +73,9 @@
     ],
     "fresh_issue_size": [
       {
-        "value": "\u20b92,500 crore",
+        "value": "Rs 2,500 crore",
         "source": "rhp",
-        "quote": "Fresh Issue of \u20b92,500 crore"
+        "quote": "Fresh Issue of Rs 2,500 crore"
       }
     ],
     "exchanges": [

@@ -13,6 +13,7 @@ import logging
 import sys
 from pathlib import Path
 
+from arthalens_ai.evidence.blobstore import LocalBlobStore
 from arthalens_ai.ingestion.fetch import FetchPolicy, GuardedFetcher
 from arthalens_ai.ingestion.pipeline import IngestionPipeline, RunReport
 from arthalens_ai.ingestion.providers.files import FileImportProvider
@@ -24,7 +25,10 @@ from arthalens_ai.policy.exclusion import load_policy
 
 async def _run(provider: FileImportProvider, settings: IngestionSettings) -> RunReport:
     policy = load_policy()
-    repo = await PostgresIngestionRepository.connect(settings.database_url.get_secret_value())
+    blobs = LocalBlobStore(settings.evidence_blob_dir) if settings.evidence_blob_dir else None
+    repo = await PostgresIngestionRepository.connect(
+        settings.database_url.get_secret_value(), blobs
+    )
     try:
         port = SearchPort({provider.name: provider}, policy)
         return await IngestionPipeline(port, repo, policy).run(provider.name)

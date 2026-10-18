@@ -50,9 +50,12 @@ See the DFD in [../architecture/system-architecture.md §4](../architecture/syst
 | ID | STRIDE | Threat | Mitigation |
 |---|---|---|---|
 | T-20 | E | **SSRF**: model- or source-provided URL makes us fetch `169.254.169.254`, internal hosts | Fetch only via SearchPort; per-provider domain allowlist; resolve DNS and block private/link-local/loopback ranges; re-check after redirects; no `file://`/`gopher://`; egress firewall in prod |
-| T-21 | T | Malicious PDF (parser exploits, zip bombs, huge pages) | Size/page/time limits; parse in a sandboxed subprocess with resource limits; no JS execution; pinned, scanned parser deps |
+| T-21 | T | Malicious PDF (parser exploits, zip bombs, huge pages) | **Implemented (M3):** PDFs parsed in a sandboxed subprocess (`python -I`, no inherited secrets, CPU/memory/file-size/open-file limits, wall-clock kill, output cap); page limit; no JS execution; pinned parser deps. Network isolation of the worker relies on container egress policy (M11) |
 | T-22 | T | Source poisoning: fake "official" page, manipulated GMP | Authority by allowlisted domain, not by page claims; GMP off by default and never used in calculations; discrepancies surfaced |
 | T-23 | I | Leaking user data to sources (e.g. sending PAN to a registrar) | AI service never receives user PII; registrar lookups with user identifiers are out of scope |
+| T-24 | I | Content-existence oracle: re-inserting known bytes reveals they were seen before | Only the service calls `evidence_put_content`, never tenants; requires the exact bytes; accepted (ADR-0016) |
+| T-25 | E | SECURITY DEFINER content writer abused to bypass RLS | Single fixed INSERT, `search_path` pinned, EXECUTE granted to `app_ai` only, constraints and immutability triggers still apply |
+| T-26 | T | Evidence altered after the fact to support a claim | Immutability triggers for every role incl. owner; content-addressed bytes re-verified on read; versions instead of edits (ADR-0016) |
 
 ### 3.4 AI ↔ Gemini (TB2→TB3), LLM-specific
 

@@ -122,7 +122,7 @@ To avoid two services racing on the same rows, each table has one writer service
 | Writer | Tables |
 |---|---|
 | api | `users`, `tenants`, `memberships`, `roles`, `permissions`, `research_jobs` (insert/cancel), `research_reports` (insert/delete), `ipo_calculation_scenarios`, `watchlist_items`, `holdings`, `wishlist_items`, `alerts`, `idempotency_keys`, `audit_events` (user actions) |
-| ai | `ipos`, `ipo_snapshots`, `quarantined_entities`, `evidence_documents`, `evidence_passages`, `evidence_claims`, `claim_citations`, `research_sections`, `research_events`, `financial_metrics`, `research_jobs` (status transitions), `research_reports` (completion), `stocks`, `stock_news`, `price_snapshots`, `notification_jobs`, `usage_records`, `evaluation_runs` |
+| ai | `ipos`, `ipo_snapshots`, `quarantined_entities`, `evidence_documents`, `evidence_contents` and `evidence_passages` (only via `evidence_put_content`), `evidence_retrievals`, `evidence_sets`, `evidence_set_items`, `evidence_claims`, `claim_citations`, `research_sections`, `research_events`, `financial_metrics`, `research_jobs` (status transitions), `research_reports` (completion), `stocks`, `stock_news`, `price_snapshots`, `notification_jobs`, `usage_records`, `evaluation_runs` |
 
 ## 4. Data-flow diagram (trust boundaries)
 
@@ -170,7 +170,7 @@ Data classification:
 
 ## 5. Deployment views
 
-**Local (implemented in Milestone 1):** Docker Compose runs `postgres` (17, roles created on first start), `migrate` (one-shot dbmate job), `ai` (FastAPI), `backend` (Fastify) and `frontend` (nginx serving the build and proxying `/api`). All ports bind to 127.0.0.1. No Redis. `ai-worker` joins in M4 and object storage when source snapshots are stored ([ADR-0014](../decisions/0014-milestone-1-implementation-refinements.md)). Mock providers will be on by default, with live providers behind explicit env flags.
+**Local (implemented in Milestone 1):** Docker Compose runs `postgres` (17, roles created on first start), `migrate` (one-shot dbmate job), `ai` (FastAPI), `backend` (Fastify) and `frontend` (nginx serving the build and proxying `/api`). All ports bind to 127.0.0.1. No Redis. `ai-worker` joins in M4 and object storage when source snapshots are stored ([ADR-0014](../decisions/0014-milestone-1-implementation-refinements.md)). Mock providers will be on by default, with live providers behind explicit env flags. Milestone 3 added Tesseract to the `ai` image, an `evidence` volume for write-once source snapshots, and an `ai-test` service (profile `test`) that runs the full Python suite.
 
 **Production (Milestone 11):** container images → private registry; Helm chart; Terraform for managed Postgres, object storage, secret manager, and egress firewall (allowlist). API is horizontally scaled behind a load balancer. AI workers scale on queue depth. A Redis tier is added only if measured rate-limit or cache contention justifies it ([ADR-0004](../decisions/0004-postgres-and-job-queue.md)).
 
