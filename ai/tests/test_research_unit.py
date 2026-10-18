@@ -350,3 +350,32 @@ def test_summary_reuses_existing_citations_only() -> None:
 
 def test_final_status_is_degraded_until_validation_exists() -> None:
     assert final_status(run(deps())) == "completed_degraded"
+
+
+def test_cancelled_model_calls_return_their_budget() -> None:
+    """Review finding: a call cut off by the section deadline must not keep its reservation."""
+    d = deps(FakeModelPort(delay_s=5), section_timeout_s=0.2)
+    run(d)
+    assert d.budget.used == 0
+
+
+def test_worker_loop_survives_a_failing_job() -> None:
+    """Review finding: an error outside the run used to escape run_once and kill the worker."""
+    from arthalens_ai.research.worker import Worker
+
+    class FlakyStore:
+        calls = 0
+
+        async def claim(self, worker: str, lease_s: int) -> None:
+            FlakyStore.calls += 1
+            if FlakyStore.calls == 1:
+                raise RuntimeError("database hiccup")
+            w.stop()
+            return None
+
+    settings = WorkerSettings.model_validate(
+        {"DATABASE_URL": "postgresql://x", "RESEARCH_POLL_SECONDS": 0.01}
+    )
+    w = Worker(FlakyStore(), FakeModelPort(), load_policy(), settings, worker_id="t")  # type: ignore[arg-type]
+    asyncio.run(asyncio.wait_for(w.run_forever(), 5))
+    assert FlakyStore.calls == 2  # it kept going after the error

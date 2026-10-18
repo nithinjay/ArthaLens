@@ -7,6 +7,13 @@ import {
   ResearchReportSchema,
 } from '@arthalens/contracts';
 import { evaluate, type ExclusionPolicy } from '@arthalens/policy';
+import {
+  CURSOR_SCHEMA,
+  PROBLEM_SCHEMA as PROBLEM,
+  UUID_PATTERN,
+  decodeCursor,
+  isPgTimestamp,
+} from '../http.js';
 import { identityOf, requireIdentity, type IdentityConfig } from '../identity.js';
 import type { AuditEvent } from '../ipos/repository.js';
 import { sendProblem } from '../plugins/problem.js';
@@ -22,21 +29,7 @@ export interface ResearchRouteDeps {
   heartbeatMs?: number;
 }
 
-const UUID_PATTERN = '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$';
 const ref = (schema: { $id: string }) => ({ $ref: `${schema.$id}#` });
-const PROBLEM = {
-  type: 'object',
-  properties: {
-    type: { type: 'string' },
-    title: { type: 'string' },
-    status: { type: 'integer' },
-    detail: { type: 'string' },
-    instance: { type: 'string' },
-    request_id: { type: 'string' },
-    code: { type: 'string' },
-  },
-} as const;
-
 const createHeaders = {
   type: 'object',
   properties: {
@@ -49,7 +42,7 @@ const listQuery = {
   additionalProperties: false,
   properties: {
     limit: { type: 'integer', minimum: 1, maximum: 100, default: 20 },
-    cursor: { type: 'string', maxLength: 300, pattern: '^[A-Za-z0-9_-]+$' },
+    cursor: CURSOR_SCHEMA,
   },
 } as const;
 
@@ -126,17 +119,9 @@ export async function researchRoutes(app: FastifyInstance, deps: ResearchRouteDe
       const { limit = 20, cursor } = request.query;
       let before: { createdAt: string; id: string } | undefined;
       if (cursor) {
-        try {
-          const [createdAt, id] = JSON.parse(Buffer.from(cursor, 'base64url').toString()) as [
-            string,
-            string,
-          ];
-          if (typeof createdAt !== 'string' || !new RegExp(UUID_PATTERN).test(id))
-            throw new Error();
-          before = { createdAt, id };
-        } catch {
-          return sendProblem(request, reply, 400, 'invalid cursor');
-        }
+        const decoded = decodeCursor(cursor, isPgTimestamp);
+        if (!decoded) return sendProblem(request, reply, 400, 'invalid cursor');
+        before = { createdAt: decoded.key, id: decoded.id };
       }
       return deps.repo.list(identityOf(request), limit, before);
     },
@@ -150,6 +135,8 @@ export async function researchRoutes(app: FastifyInstance, deps: ResearchRouteDe
       const ipo = await deps.repo.reportIpo(identityOf(request), reportId);
       // Another user's (or tenant's) report is indistinguishable from a missing one.
       if (!ipo) return sendProblem(request, reply, 404, 'Report not found');
+      // Deleting your own report is always allowed: it exposes nothing about the IPO.
+      if (request.method === 'DELETE') return;
       const verdict = evaluate(deps.policy, { name: ipo.company_name });
       if (ipo.exclusion_status !== 'allowed' || verdict.decision !== 'allowed') {
         await deps

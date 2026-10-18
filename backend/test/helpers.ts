@@ -209,7 +209,15 @@ export class FakeResearchRepo implements ResearchRepository {
   }
 
   async events(identity: Identity, id: string, after: number) {
-    return (this.own(identity, id)?.events ?? []).filter((e) => e.seq > after);
+    const r = this.own(identity, id);
+    return {
+      events: (r?.events ?? []).filter((e) => e.seq > after),
+      finished:
+        !r ||
+        ['completed', 'completed_degraded', 'failed', 'rejected_excluded'].includes(
+          r.report.status,
+        ),
+    };
   }
 
   async evidence(identity: Identity, id: string): Promise<ResearchEvidence | null> {
@@ -222,6 +230,12 @@ export class FakeResearchRepo implements ResearchRepository {
     const r = this.own(identity, id);
     if (r) r.deleted = true;
     return Boolean(r);
+  }
+
+  /** Test helper: finish the report and write its terminal event together, as the worker does. */
+  finish(id: string, status: ResearchReport['status'] = 'completed_degraded') {
+    this.reports.get(id)!.report.status = status;
+    this.push(id, 'job.completed', { status });
   }
 
   /** Test helper: append an event the way the worker would. */

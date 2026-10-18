@@ -97,7 +97,7 @@ Totals: pytest 307 in the container (0 skipped; macOS skips 21 OCR/DB/Linux-only
 - The PDF worker isn't network-isolated (container egress policy, M11).
 - No API endpoint serves evidence yet (`GET /research/{id}/evidence` arrives with reports in M4).
 
-## Milestone 4: Research orchestration (awaiting your verification)
+## Milestone 4: Research orchestration (merged 2026-10-18, PR #4 incl. review fixes)
 
 | AC | Item | State | Evidence (run 2026-10-18) |
 |---|---|---|---|
@@ -117,8 +117,9 @@ Totals: pytest 307 in the container (0 skipped; macOS skips 21 OCR/DB/Linux-only
 | — | Exclusion: L2 (no report for a withdrawn IPO), L3 (POST behind the IPO guard; report routes guarded), L4 (worker re-checks) | tested | Integration + route tests + smoke (403) |
 | — | Tenant isolation: another tenant sees none of a report's rows and can't write to it; another user's report is 404 | tested | Integration + route tests |
 | — | Dev identity: refused in production; client-sent tenant/user ids ignored | tested | Config + route tests |
+| — | PR #4 review: 10 findings, all real, all fixed with regression tests | tested | Sweeper finalises report + `job.failed`; worker loop survives any job; job's own `max_attempts`; lease fencing (`FOR SHARE`) + cancel on loss; SSE closes when final; microsecond cursors; budget returned on cancel; owner can delete excluded reports; deleted reports cancelled; shared HTTP helpers. Final status and terminal event now written in one transaction |
 
-Totals: pytest 357 in the container (356 passed, 1 skipped = live Gemini) · Vitest 115 (backend 77, policy 33, frontend 5) · smoke 70 · migration roundtrip and backfill checks pass · secret scan clean.
+Totals: pytest 363 in the container (362 passed, 1 skipped = live Gemini) · Vitest 130 (backend 92, policy 33, frontend 5) · smoke 70 · migration roundtrip and backfill checks pass · secret scan clean.
 
 ### Known limitations (Milestone 4)
 - **No real model has been called yet.** All reports so far come from `fake-deterministic`, which quotes evidence sentences by keyword. Gemini needs your key (Q8).

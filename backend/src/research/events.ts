@@ -2,7 +2,7 @@ import type { FastifyReply, FastifyRequest } from 'fastify';
 import pg from 'pg';
 import type { ResearchEvent } from '@arthalens/contracts';
 import type { Identity } from '../identity.js';
-import { TERMINAL_EVENTS, type ResearchRepository } from './repository.js';
+import { EVENTS_PAGE, TERMINAL_EVENTS, type ResearchRepository } from './repository.js';
 
 /** Something that says "report X has new events". Payloads carry only the report id. */
 export interface EventNotifier {
@@ -135,7 +135,7 @@ export async function streamEvents(
     try {
       do {
         again = false;
-        const events = await repo.events(identity, reportId, last);
+        const { events, finished } = await repo.events(identity, reportId, last);
         for (const event of events) {
           if (!open) return;
           res.write(frame(event));
@@ -144,6 +144,17 @@ export async function streamEvents(
             finish();
             return;
           }
+        }
+        if (events.length === EVENTS_PAGE) {
+          again = true; // a full page: there may be more to read right away
+          continue;
+        }
+        // Everything has been read. If the report is final (its terminal event is written in
+        // the same transaction as its status) or gone, nothing more will come: end the stream
+        // instead of heartbeating forever, e.g. after resuming past the terminal event.
+        if (finished) {
+          finish();
+          return;
         }
       } while (again && open);
     } catch (err) {

@@ -50,7 +50,7 @@ CREATE TABLE research_jobs (
   report_id         uuid NOT NULL UNIQUE,
   tenant_id         uuid NOT NULL,
   status            text NOT NULL DEFAULT 'queued' CHECK (status IN (
-                      'queued', 'running', 'succeeded', 'failed', 'rejected_excluded')),
+                      'queued', 'running', 'succeeded', 'failed', 'cancelled', 'rejected_excluded')),
   attempt           integer NOT NULL DEFAULT 0 CHECK (attempt >= 0),
   max_attempts      integer NOT NULL DEFAULT 3 CHECK (max_attempts >= 1),
   lease_owner       text,
@@ -180,7 +180,7 @@ $$;
 -- only cross-tenant path: it returns one claimable job (and its tenant) and leases it. The
 -- worker then sets app.tenant_id and does all further reads and writes under RLS.
 CREATE FUNCTION claim_research_job(p_worker text, p_lease_seconds integer)
-RETURNS TABLE (job_id uuid, report_id uuid, tenant_id uuid, attempt integer)
+RETURNS TABLE (job_id uuid, report_id uuid, tenant_id uuid, attempt integer, max_attempts integer)
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
 BEGIN
   RETURN QUERY
@@ -198,21 +198,38 @@ BEGIN
     lease_expires_at = now() + make_interval(secs => p_lease_seconds),
     attempt = j.attempt + 1
     FROM next WHERE j.id = next.id
-  RETURNING j.id, j.report_id, j.tenant_id, j.attempt;
+  RETURNING j.id, j.report_id, j.tenant_id, j.attempt, j.max_attempts;
 END;
 $$;
 REVOKE ALL ON FUNCTION claim_research_job(text, integer) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION claim_research_job(text, integer) TO app_ai;
 
--- Jobs whose lease expired after the last attempt: fail them so they don't stay "running".
+-- Jobs whose lease expired after the last attempt: fail the job AND its report, and write the
+-- terminal event, so nothing is left "running" and SSE clients see the end.
 CREATE FUNCTION fail_exhausted_research_jobs() RETURNS integer
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
-DECLARE n integer;
+DECLARE
+  j record;
+  next_seq bigint;
+  n integer := 0;
 BEGIN
-  UPDATE research_jobs SET status = 'failed', lease_owner = NULL, lease_expires_at = NULL,
-         last_error = coalesce(last_error, 'lease expired after the last attempt')
-   WHERE status = 'running' AND lease_expires_at < now() AND attempt >= max_attempts;
-  GET DIAGNOSTICS n = ROW_COUNT;
+  FOR j IN
+    UPDATE research_jobs SET status = 'failed', lease_owner = NULL, lease_expires_at = NULL,
+           last_error = coalesce(last_error, 'lease expired after the last attempt')
+     WHERE status = 'running' AND lease_expires_at < now() AND attempt >= max_attempts
+    RETURNING report_id, tenant_id, attempt
+  LOOP
+    UPDATE research_reports SET status = 'failed', completed_at = now(),
+           error = 'The research job stopped responding and ran out of attempts.'
+     WHERE id = j.report_id AND status IN ('pending', 'running');
+    PERFORM pg_advisory_xact_lock(hashtextextended(j.report_id::text, 1));
+    SELECT coalesce(max(seq), 0) + 1 INTO next_seq FROM research_events WHERE report_id = j.report_id;
+    INSERT INTO research_events (report_id, tenant_id, seq, type, payload)
+    VALUES (j.report_id, j.tenant_id, next_seq, 'job.failed',
+            jsonb_build_object('attempts', j.attempt, 'reason', 'lease_expired'));
+    PERFORM pg_notify('research_events', j.report_id::text);
+    n := n + 1;
+  END LOOP;
   RETURN n;
 END;
 $$;

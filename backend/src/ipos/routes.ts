@@ -2,6 +2,13 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { FromSchema } from 'json-schema-to-ts';
 import { IpoDetailSchema, IpoListSchema, type IpoList } from '@arthalens/contracts';
 import { evaluate, normalizeName, type ExclusionPolicy } from '@arthalens/policy';
+import {
+  CURSOR_SCHEMA,
+  PROBLEM_SCHEMA,
+  UUID_PATTERN,
+  decodeCursor as decode,
+  encodeCursor as encode,
+} from '../http.js';
 import { sendProblem } from '../plugins/problem.js';
 import type { IpoIdentity, IpoRepository } from './repository.js';
 
@@ -11,8 +18,6 @@ export interface IpoRouteDeps {
   /** More routes for /api/v1/ipos/:ipoId/..., registered behind the same exclusion guard. */
   scoped?: ((scope: FastifyInstance) => Promise<void>)[];
 }
-
-const UUID_PATTERN = '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$';
 
 const listQuerySchema = {
   type: 'object',
@@ -35,7 +40,7 @@ const listQuerySchema = {
     exchange: { type: 'string', enum: ['NSE', 'BSE'] },
     q: { type: 'string', minLength: 1, maxLength: 100 },
     limit: { type: 'integer', minimum: 1, maximum: 100, default: 20 },
-    cursor: { type: 'string', maxLength: 500, pattern: '^[A-Za-z0-9_-]+$' },
+    cursor: CURSOR_SCHEMA,
   },
 } as const;
 type ListQuery = FromSchema<typeof listQuerySchema>;
@@ -46,40 +51,11 @@ const ipoParamsSchema = {
   properties: { ipoId: { type: 'string', pattern: UUID_PATTERN } },
 } as const;
 
-const PROBLEM_SCHEMA = {
-  type: 'object',
-  properties: {
-    type: { type: 'string' },
-    title: { type: 'string' },
-    status: { type: 'integer' },
-    detail: { type: 'string' },
-    instance: { type: 'string' },
-    request_id: { type: 'string' },
-    code: { type: 'string' },
-  },
-} as const;
-
-// Cursor = base64url(JSON [normalized_name, id]) of the last item on the previous page.
-export function encodeCursor(normalizedName: string, id: string): string {
-  return Buffer.from(JSON.stringify([normalizedName, id])).toString('base64url');
-}
-
+// Cursor = [normalized_name, id] of the last item on the previous page.
+export const encodeCursor = (normalizedName: string, id: string) => encode(normalizedName, id);
 export function decodeCursor(cursor: string): { normalizedName: string; id: string } | null {
-  try {
-    const value: unknown = JSON.parse(Buffer.from(cursor, 'base64url').toString('utf8'));
-    if (
-      Array.isArray(value) &&
-      value.length === 2 &&
-      typeof value[0] === 'string' &&
-      typeof value[1] === 'string' &&
-      new RegExp(UUID_PATTERN).test(value[1])
-    ) {
-      return { normalizedName: value[0], id: value[1] };
-    }
-  } catch {
-    // fall through
-  }
-  return null;
+  const decoded = decode(cursor, () => true);
+  return decoded && { normalizedName: decoded.key, id: decoded.id };
 }
 
 declare module 'fastify' {

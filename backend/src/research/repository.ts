@@ -12,10 +12,29 @@ import type {
   ResearchSummary,
 } from '@arthalens/contracts';
 import type { Identity } from '../identity.js';
+import { encodeCursor } from '../http.js';
 import { withTenant } from '../tenant.js';
 
 export const PIPELINE_VERSION = 'm4.1';
-export const TERMINAL_EVENTS = new Set(['job.completed', 'job.failed', 'job.rejected']);
+export const TERMINAL_EVENTS = new Set([
+  'job.completed',
+  'job.failed',
+  'job.rejected',
+  'job.cancelled',
+]);
+const TERMINAL_STATUSES = new Set([
+  'completed',
+  'completed_degraded',
+  'failed',
+  'rejected_excluded',
+]);
+
+export interface EventBatch {
+  events: ResearchEvent[];
+  /** The report is in a final state (its terminal event was written in the same transaction)
+   *  or is no longer visible: either way, nothing more will come. */
+  finished: boolean;
+}
 
 export const DISCLAIMERS = [
   'Educational research only. This is not investment advice and does not recommend subscribing to, buying or avoiding any security.',
@@ -51,7 +70,7 @@ export interface ResearchRepository {
     limit: number,
     before?: { createdAt: string; id: string },
   ): Promise<ResearchList>;
-  events(identity: Identity, reportId: string, afterSeq: number): Promise<ResearchEvent[]>;
+  events(identity: Identity, reportId: string, afterSeq: number): Promise<EventBatch>;
   evidence(identity: Identity, reportId: string): Promise<ResearchEvidence | null>;
   softDelete(identity: Identity, reportId: string): Promise<boolean>;
 }
@@ -97,12 +116,17 @@ const EVENTS_SQL = `SELECT e.seq, e.type, e.payload, e.created_at
   FROM research_events e JOIN research_reports r ON r.id = e.report_id
  WHERE ${OWN_REPORT} AND e.seq > $2
  ORDER BY e.seq LIMIT 1000`;
+/** Must match the LIMIT above: a shorter batch means everything has been read. */
+export const EVENTS_PAGE = 1000;
 
 const REPORT_EXISTS_SQL = `SELECT 1 FROM research_reports r WHERE ${OWN_REPORT}`;
 
 const SOFT_DELETE_SQL = `UPDATE research_reports r SET deleted_at = now() WHERE ${OWN_REPORT}`;
 
-const LIST_SQL = `SELECT r.id, r.ipo_id, i.company_name, r.status, r.created_at, r.completed_at
+const REPORT_STATUS_SQL = `SELECT r.status FROM research_reports r WHERE ${OWN_REPORT}`;
+
+const LIST_SQL = `SELECT r.id, r.ipo_id, i.company_name, r.status, r.created_at, r.completed_at,
+       r.created_at::text AS cursor_ts
   FROM research_reports r JOIN ipos i ON i.id = r.ipo_id
  WHERE r.owner_user_id = current_setting('app.user_id')::uuid AND r.deleted_at IS NULL
    AND ($1::timestamptz IS NULL OR (r.created_at, r.id) < ($1::timestamptz, $2::uuid))
@@ -295,23 +319,28 @@ export class PgResearchRepository implements ResearchRepository {
         completed_at: iso(r.completed_at),
       }));
       const last = page.at(-1);
+      // The cursor carries Postgres's own text form (microseconds), not toISOString().
+      const lastRow = rows[limit - 1];
       const nextCursor =
-        rows.length > limit && last
-          ? Buffer.from(JSON.stringify([last.created_at, last.id])).toString('base64url')
-          : null;
+        rows.length > limit && last && lastRow ? encodeCursor(lastRow.cursor_ts, last.id) : null;
       return { schema_version: 'research-list.v1', items: page, next_cursor: nextCursor };
     });
   }
 
-  events(identity: Identity, reportId: string, afterSeq: number): Promise<ResearchEvent[]> {
+  events(identity: Identity, reportId: string, afterSeq: number): Promise<EventBatch> {
     return withTenant(this.pool, identity, async (db) => {
       const { rows } = await db.query(EVENTS_SQL, [reportId, afterSeq]);
-      return rows.map((r) => ({
-        seq: Number(r.seq),
-        type: r.type,
-        payload: r.payload,
-        created_at: r.created_at.toISOString(),
-      }));
+      const status = (await db.query<{ status: string }>(REPORT_STATUS_SQL, [reportId])).rows[0]
+        ?.status;
+      return {
+        events: rows.map((r) => ({
+          seq: Number(r.seq),
+          type: r.type,
+          payload: r.payload,
+          created_at: r.created_at.toISOString(),
+        })),
+        finished: status === undefined || TERMINAL_STATUSES.has(status),
+      };
     });
   }
 

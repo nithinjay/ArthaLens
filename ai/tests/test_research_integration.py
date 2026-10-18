@@ -6,6 +6,7 @@ Run with scripts/test-integration.sh (throwaway database). Skipped when the URLs
 import asyncio
 import os
 from collections.abc import Awaitable, Callable
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 from uuid import UUID
@@ -22,7 +23,7 @@ from arthalens_ai.ingestion.searchport import SearchPort
 from arthalens_ai.policy.exclusion import load_policy
 from arthalens_ai.research.contracts import SectionResult
 from arthalens_ai.research.model import FakeModelPort
-from arthalens_ai.research.store import ClaimedJob, ReportContext, ResearchStore
+from arthalens_ai.research.store import ClaimedJob, LeaseLost, ReportContext, ResearchStore
 from arthalens_ai.research.worker import Worker, WorkerSettings
 
 AI_URL = os.environ.get("TEST_DB_AI_URL")
@@ -482,5 +483,142 @@ def test_reports_are_invisible_to_other_tenants() -> None:
                     "INSERT INTO research_events (report_id, tenant_id, seq, type) VALUES (%s, %s, 999, 'x.y')",
                     (report, tenant_a),
                 )
+
+    run(t)
+
+
+# --- review findings on PR #4 ---------------------------------------------------------------
+
+
+async def last_event(admin: Conn, report: UUID) -> str:
+    return str(
+        await one(
+            admin,
+            "SELECT type FROM research_events WHERE report_id = %s ORDER BY seq DESC LIMIT 1",
+            report,
+        )
+    )
+
+
+def test_sweeper_fails_the_report_and_writes_the_terminal_event() -> None:
+    async def t(pool: AsyncConnectionPool[Any], api: Conn, admin: Conn) -> None:
+        await drain(worker(pool))
+        tenant, user = await tenant_and_user(admin)
+        ipo_id, snap = await ipo(admin, "Synthetic Alpha Foods Limited")
+        report = await create_report(api, tenant, user, ipo_id, snap)
+        await admin.execute(
+            "UPDATE research_reports SET status = 'running', started_at = now() WHERE id = %s",
+            (report,),
+        )
+        await admin.execute(
+            "UPDATE research_jobs SET status = 'running', attempt = max_attempts, lease_owner = 'ghost',"
+            " lease_expires_at = now() - interval '1 second' WHERE report_id = %s",
+            (report,),
+        )
+        await ResearchStore(pool).claim("w", 30)  # runs the sweeper first
+        r = (
+            await rows(
+                admin, "SELECT status, completed_at FROM research_reports WHERE id = %s", report
+            )
+        )[0]
+        assert r["status"] == "failed" and r["completed_at"] is not None
+        assert await last_event(admin, report) == "job.failed"
+
+    run(t)
+
+
+def test_the_jobs_own_attempt_limit_is_used() -> None:
+    async def t(pool: AsyncConnectionPool[Any], api: Conn, admin: Conn) -> None:
+        await drain(worker(pool))
+        tenant, user = await tenant_and_user(admin)
+        ipo_id, snap = await ipo(admin, "Synthetic Beta Logistics Limited")
+        report = await create_report(api, tenant, user, ipo_id, snap)
+        await admin.execute(
+            "UPDATE research_jobs SET max_attempts = 1 WHERE report_id = %s", (report,)
+        )
+        await worker(pool, CrashingStore(pool, "J")).run_once()
+        job = (await rows(admin, "SELECT status FROM research_jobs WHERE report_id = %s", report))[
+            0
+        ]
+        assert job["status"] == "failed"  # not stranded as 'queued'
+        assert (
+            await one(admin, "SELECT status FROM research_reports WHERE id = %s", report)
+            == "failed"
+        )
+        assert await last_event(admin, report) == "job.failed"
+
+    run(t)
+
+
+def test_a_worker_that_lost_its_lease_can_no_longer_write() -> None:
+    async def t(pool: AsyncConnectionPool[Any], api: Conn, admin: Conn) -> None:
+        await drain(worker(pool))
+        tenant, user = await tenant_and_user(admin)
+        ipo_id, snap = await ipo(admin, "Synthetic Alpha Foods Limited")
+        report = await create_report(api, tenant, user, ipo_id, snap)
+        store = ResearchStore(pool)
+        job_a = await store.claim("worker-a", 30)
+        assert job_a is not None
+        ctx_a = await store.load_report(job_a, "worker-a")
+        await admin.execute(
+            "UPDATE research_jobs SET lease_expires_at = now() - interval '1 second' WHERE report_id = %s",
+            (report,),
+        )
+        job_b = await store.claim("worker-b", 30)
+        assert job_b is not None and job_b.attempt == 2
+        before = await one(
+            admin, "SELECT count(*) FROM research_events WHERE report_id = %s", report
+        )
+        with pytest.raises(LeaseLost):
+            await store.event(ctx_a, "section.started", {"section": "A"})
+        with pytest.raises(LeaseLost):
+            await store.set_report(ctx_a, status="failed")
+        with pytest.raises(LeaseLost):
+            await store.save_section(
+                ctx_a,
+                SectionResult("B", "unavailable", "deterministic", "x"),
+                1,
+                datetime.now(UTC),
+            )
+        assert (
+            await one(admin, "SELECT count(*) FROM research_events WHERE report_id = %s", report)
+            == before
+        )
+        assert (
+            await one(admin, "SELECT count(*) FROM research_sections WHERE report_id = %s", report)
+            == 0
+        )
+        # Worker B, the rightful owner, finishes normally.
+        await worker(pool, name="worker-b").process(job_b)
+        assert (
+            await one(admin, "SELECT status FROM research_reports WHERE id = %s", report)
+            == "completed_degraded"
+        )
+
+    run(t)
+
+
+def test_a_deleted_report_is_cancelled_without_running() -> None:
+    async def t(pool: AsyncConnectionPool[Any], api: Conn, admin: Conn) -> None:
+        await drain(worker(pool))
+        tenant, user = await tenant_and_user(admin)
+        ipo_id, snap = await ipo(admin, "Synthetic Alpha Foods Limited")
+        report = await create_report(api, tenant, user, ipo_id, snap)
+        await admin.execute(
+            "UPDATE research_reports SET deleted_at = now() WHERE id = %s", (report,)
+        )
+        await drain(worker(pool))
+        assert (
+            await one(admin, "SELECT status FROM research_jobs WHERE report_id = %s", report)
+            == "cancelled"
+        )
+        assert (
+            await one(admin, "SELECT count(*) FROM research_sections WHERE report_id = %s", report)
+            == 0
+        )
+        assert (
+            await one(admin, "SELECT count(*) FROM usage_records WHERE report_id = %s", report) == 0
+        )
+        assert await last_event(admin, report) == "job.cancelled"
 
     run(t)

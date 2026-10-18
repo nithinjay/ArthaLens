@@ -193,6 +193,11 @@ async def _call_model(
         )
     try:
         result = await model.generate(request)
+    except asyncio.CancelledError:
+        # The section deadline cancelled the call: give the reservation back so later
+        # sections (and the summary) aren't wrongly skipped for budget.
+        deps.budget.settle(estimate, 0)
+        raise
     except ModelError as exc:
         deps.budget.settle(estimate, 0)
         outcome = exc.code if exc.code in ("timeout", "invalid_output") else "error"

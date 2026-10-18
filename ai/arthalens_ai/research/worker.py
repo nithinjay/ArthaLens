@@ -32,11 +32,9 @@ from arthalens_ai.research.agents import ExcludedDuringRun, ResearchDeps, TokenB
 from arthalens_ai.research.catalog import CATALOG
 from arthalens_ai.research.contracts import SectionResult
 from arthalens_ai.research.model import FakeModelPort, GeminiModelPort, ModelPort
-from arthalens_ai.research.store import ClaimedJob, ReportContext, ResearchStore
+from arthalens_ai.research.store import ClaimedJob, LeaseLost, ReportContext, ResearchStore
 
 logger = logging.getLogger("arthalens.worker")
-
-PIPELINE_VERSION = "m4.1"
 
 
 class WorkerSettings(BaseSettings):
@@ -138,7 +136,14 @@ class Worker:
     async def run_forever(self) -> None:
         logger.info("worker %s started (model=%s)", self.worker_id, self.model.model)
         while not self._stop.is_set():
-            if not await self.run_once():
+            try:
+                worked = await self.run_once()
+            except Exception:
+                # One bad job (or a database hiccup) must never stop the worker. The job's lease
+                # expires and it is retried, or failed by the sweeper once out of attempts.
+                logger.exception("job processing failed; the worker continues")
+                worked = False
+            if not worked:
                 with contextlib.suppress(TimeoutError):
                     await asyncio.wait_for(self._stop.wait(), self.settings.poll_s)
 
@@ -146,24 +151,52 @@ class Worker:
         job = await self.store.claim(self.worker_id, self.settings.lease_s)
         if job is None:
             return False
-        heartbeat = asyncio.create_task(self._heartbeat(job))
+        lost = asyncio.Event()
+        work = asyncio.create_task(self.process(job))
+        heartbeat = asyncio.create_task(self._heartbeat(job, work, lost))
         try:
-            await self.process(job)
+            await work
+        except asyncio.CancelledError:
+            if not lost.is_set():
+                raise  # we were cancelled ourselves (shutdown)
+            logger.warning("abandoned job %s: its lease passed to another worker", job.job_id)
         finally:
             heartbeat.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await heartbeat
         return True
 
-    async def _heartbeat(self, job: ClaimedJob) -> None:
+    async def _heartbeat(
+        self, job: ClaimedJob, work: asyncio.Task[None], lost: asyncio.Event
+    ) -> None:
         while True:
             await asyncio.sleep(self.settings.lease_s / 3)
             if not await self.store.renew_lease(job, self.worker_id, self.settings.lease_s):
-                logger.warning("lost the lease on job %s", job.job_id)
+                # Stop at once; fenced writes would refuse anyway, but there's no point
+                # spending model tokens on a job another worker now owns.
+                lost.set()
+                work.cancel()
                 return
 
     async def process(self, job: ClaimedJob) -> None:
-        ctx = await self.store.load_report(job)
+        try:
+            ctx = await self.store.load_report(job, self.worker_id)
+        except LookupError as exc:
+            await self.store.finish_job(job, self.worker_id, "failed", str(exc)[:1000])
+            return
+        try:
+            await self._process(job, ctx)
+        except LeaseLost:
+            logger.warning("lease lost on job %s; another worker continues it", job.job_id)
+        except Exception as exc:
+            await self._failed_attempt(job, ctx, exc)
+
+    async def _process(self, job: ClaimedJob, ctx: ReportContext) -> None:
+        if ctx.deleted_at is not None:
+            # Deleted before it ran: don't spend anything on a report nobody can see.
+            await self.store.event(ctx, "job.cancelled", {"reason": "report deleted"})
+            await self.store.finish_job(job, self.worker_id, "cancelled", "report deleted")
+            return
         verdict = evaluate(self.policy, EntityRef(name=ctx.company_name))
         if verdict.blocked or ctx.ipo_exclusion_status != "allowed":
             await self._reject_excluded(job, ctx, verdict.rule_id)
@@ -179,12 +212,8 @@ class Worker:
         except ExcludedDuringRun:
             await self._reject_excluded(job, ctx, None)
             return
-        except Exception as exc:
-            await self._failed_attempt(job, ctx, exc)
-            return
         status = final_status(results)
-        await self.store.set_report(ctx, status=status, completed_at=datetime.now(UTC))
-        await self.store.event(ctx, "job.completed", {"status": status})
+        await self.store.finish_report(ctx, status, "job.completed", {"status": status})
         await self.store.finish_job(job, self.worker_id, "succeeded", None)
         logger.info("report %s %s", ctx.report_id, status)
 
@@ -215,33 +244,32 @@ class Worker:
     async def _reject_excluded(
         self, job: ClaimedJob, ctx: ReportContext, rule_id: str | None
     ) -> None:
-        await self.store.set_report(
+        await self.store.finish_report(
             ctx,
-            status="rejected_excluded",
-            completed_at=datetime.now(UTC),
+            "rejected_excluded",
+            "job.rejected",
+            {"code": "ENTITY_EXCLUDED", "rule_id": rule_id},
             error="Excluded by product policy",
         )
-        await self.store.event(ctx, "job.rejected", {"code": "ENTITY_EXCLUDED", "rule_id": rule_id})
         await self.store.finish_job(job, self.worker_id, "rejected_excluded", "excluded by policy")
 
     async def _failed_attempt(self, job: ClaimedJob, ctx: ReportContext, exc: Exception) -> None:
         error = f"{type(exc).__name__}: {exc}"[:1000]
         logger.warning("job %s attempt %d failed: %s", job.job_id, job.attempt, type(exc).__name__)
-        max_attempts = 3
-        if job.attempt < max_attempts:
+        if job.attempt < job.max_attempts:  # the job's own limit, not a constant
             delay = int(5 * 2 ** (job.attempt - 1) * (1 + random.random()))  # noqa: S311
             await self.store.event(
                 ctx, "job.retrying", {"attempt": job.attempt, "in_seconds": delay}
             )
             await self.store.retry_later(job, self.worker_id, delay, error)
         else:
-            await self.store.set_report(
+            await self.store.finish_report(
                 ctx,
-                status="failed",
-                completed_at=datetime.now(UTC),
+                "failed",
+                "job.failed",
+                {"attempts": job.attempt},
                 error="The research job failed after repeated attempts.",
             )
-            await self.store.event(ctx, "job.failed", {"attempts": job.attempt})
             await self.store.finish_job(job, self.worker_id, "failed", error)
 
 

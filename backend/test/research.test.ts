@@ -139,6 +139,43 @@ describe('GET /api/v1/research/:reportId', () => {
     expect(ipoRepo.audits.map((a) => a.target_type)).toContain('research_report');
   });
 
+  it('lets the owner delete a report even after its IPO is excluded (review #8)', async () => {
+    const { app, researchRepo } = await appWithAlpha();
+    const id = (await app.inject({ method: 'POST', url: `/api/v1/ipos/${ALPHA}/research` })).json()
+      .report_id;
+    researchRepo.reports.get(id)!.exclusion = 'withdrawn_by_policy';
+    expect((await app.inject({ method: 'GET', url: `/api/v1/research/${id}` })).statusCode).toBe(
+      403,
+    );
+    expect((await app.inject({ method: 'DELETE', url: `/api/v1/research/${id}` })).statusCode).toBe(
+      204,
+    );
+  });
+
+  it("still refuses to delete someone else's report", async () => {
+    const { app, researchRepo } = await appWithAlpha();
+    const id = (await app.inject({ method: 'POST', url: `/api/v1/ipos/${ALPHA}/research` })).json()
+      .report_id;
+    researchRepo.reports.get(id)!.owner = { tenantId: 'other', userId: 'other', kind: 'dev' };
+    expect((await app.inject({ method: 'DELETE', url: `/api/v1/research/${id}` })).statusCode).toBe(
+      404,
+    );
+    expect(researchRepo.reports.get(id)!.deleted).toBe(false);
+  });
+
+  it.each([
+    ['not base64 json', 'abc'],
+    ['bad timestamp', Buffer.from(JSON.stringify(['yesterday', ALPHA])).toString('base64url')],
+    [
+      'bad id',
+      Buffer.from(JSON.stringify(['2026-10-18 06:00:00.123456+00', 'x'])).toString('base64url'),
+    ],
+  ])('rejects a malformed history cursor: %s (review #6)', async (_label, cursor) => {
+    const { app } = await appWithAlpha();
+    const res = await app.inject({ method: 'GET', url: `/api/v1/research?cursor=${cursor}` });
+    expect(res.statusCode).toBe(400);
+  });
+
   it('soft-deletes, then hides the report', async () => {
     const { app } = await appWithAlpha();
     const id = (await app.inject({ method: 'POST', url: `/api/v1/ipos/${ALPHA}/research` })).json()
@@ -232,7 +269,7 @@ describe('GET /api/v1/research/:reportId/events (SSE)', () => {
 
   it('a reload after completion shows the final state and ends', async () => {
     const { base, id, researchRepo } = await live();
-    researchRepo.push(id, 'job.completed');
+    researchRepo.finish(id);
     const { frames } = await readStream(`${base}/api/v1/research/${id}/events`);
     expect(frames.at(-1)?.event).toBe('job.completed');
   });
@@ -243,6 +280,24 @@ describe('GET /api/v1/research/:reportId/events (SSE)', () => {
     setTimeout(() => researchRepo.push(id, 'job.completed'), 40); // no notify() at all
     const { frames } = await reading;
     expect(frames.at(-1)?.event).toBe('job.completed');
+  });
+
+  it('resuming after the terminal event closes at once instead of hanging (review #5)', async () => {
+    const { base, id, researchRepo } = await live({ heartbeatMs: 10_000 });
+    researchRepo.finish(id); // events 1 (queued) and 2 (completed)
+    const started = Date.now();
+    const { frames } = await readStream(`${base}/api/v1/research/${id}/events`, {
+      'last-event-id': '2',
+    });
+    expect(frames).toEqual([]);
+    expect(Date.now() - started).toBeLessThan(2_000); // didn't wait for a heartbeat
+  });
+
+  it('a report that is final without a terminal event in sight still closes (review #5)', async () => {
+    const { base, id, researchRepo } = await live({ heartbeatMs: 10_000 });
+    researchRepo.reports.get(id)!.report.status = 'failed';
+    const { frames } = await readStream(`${base}/api/v1/research/${id}/events`);
+    expect(frames.map((f) => f.event)).toEqual(['job.queued']);
   });
 
   it("does not stream another user's report", async () => {

@@ -42,6 +42,11 @@ class ClaimedJob:
     report_id: UUID
     tenant_id: UUID
     attempt: int
+    max_attempts: int
+
+
+class LeaseLost(Exception):
+    """Another worker owns this job now; this one must stop writing."""
 
 
 @dataclass(frozen=True)
@@ -56,6 +61,11 @@ class ReportContext:
     evidence_set_id: UUID | None
     status: str
     started_at: datetime | None
+    deleted_at: datetime | None
+    # Fencing: every write checks that this worker still holds this attempt's lease.
+    job_id: UUID
+    worker: str
+    attempt: int
 
 
 class ResearchStore:
@@ -78,7 +88,9 @@ class ResearchStore:
             row = await cur.fetchone()
         if row is None:
             return None
-        return ClaimedJob(row["job_id"], row["report_id"], row["tenant_id"], row["attempt"])
+        return ClaimedJob(
+            row["job_id"], row["report_id"], row["tenant_id"], row["attempt"], row["max_attempts"]
+        )
 
     async def renew_lease(self, job: ClaimedJob, worker: str, lease_s: int) -> bool:
         async with self.tenant_tx(job.tenant_id) as cur:
@@ -95,8 +107,8 @@ class ResearchStore:
         async with self.tenant_tx(job.tenant_id) as cur:
             await cur.execute(
                 "UPDATE research_jobs SET status = %s, lease_owner = NULL, lease_expires_at = NULL,"
-                " last_error = %s WHERE id = %s AND lease_owner = %s",
-                (status, error, job.job_id, worker),
+                " last_error = %s WHERE id = %s AND lease_owner = %s AND attempt = %s",
+                (status, error, job.job_id, worker, job.attempt),
             )
 
     async def retry_later(self, job: ClaimedJob, worker: str, delay_s: int, error: str) -> None:
@@ -105,18 +117,32 @@ class ResearchStore:
                 "UPDATE research_jobs SET status = 'queued', lease_owner = NULL,"
                 " lease_expires_at = NULL, last_error = %s,"
                 " next_run_at = now() + make_interval(secs => %s)"
-                " WHERE id = %s AND lease_owner = %s",
-                (error[:1000], delay_s, job.job_id, worker),
+                " WHERE id = %s AND lease_owner = %s AND attempt = %s",
+                (error[:1000], delay_s, job.job_id, worker, job.attempt),
             )
 
     # --- report context ---------------------------------------------------------------------
 
-    async def load_report(self, job: ClaimedJob) -> ReportContext:
+    async def _fence(self, cur: Cursor, ctx: ReportContext) -> None:
+        """Fail unless this worker still holds the lease for this attempt. FOR SHARE keeps the
+        job row locked until the transaction ends, so the lease can't be reclaimed (claimers
+        use SKIP LOCKED) between this check and the write it protects."""
+        await cur.execute(
+            "SELECT 1 FROM research_jobs WHERE id = %s AND lease_owner = %s AND attempt = %s"
+            " AND status = 'running' FOR SHARE",
+            (ctx.job_id, ctx.worker, ctx.attempt),
+        )
+        if await cur.fetchone() is None:
+            raise LeaseLost(
+                f"job {ctx.job_id} attempt {ctx.attempt} is no longer leased to {ctx.worker}"
+            )
+
+    async def load_report(self, job: ClaimedJob, worker: str) -> ReportContext:
         async with self.tenant_tx(job.tenant_id) as cur:
             await cur.execute(
                 """
                 SELECT r.id, r.tenant_id, r.ipo_id, r.snapshot_id, r.evidence_set_id, r.status,
-                       r.started_at, i.company_name, i.exclusion_status,
+                       r.started_at, r.deleted_at, i.company_name, i.exclusion_status,
                        s.evidence_set_id AS snapshot_set
                   FROM research_reports r
                   JOIN ipos i ON i.id = r.ipo_id
@@ -139,6 +165,10 @@ class ResearchStore:
             row["evidence_set_id"],
             row["status"],
             row["started_at"],
+            deleted_at=row["deleted_at"],
+            job_id=job.job_id,
+            worker=worker,
+            attempt=job.attempt,
         )
 
     async def set_report(self, ctx: ReportContext, **values: Any) -> None:
@@ -148,10 +178,30 @@ class ResearchStore:
         columns = sorted(values)
         assignments = ", ".join(f"{c} = %s" for c in columns)  # names from the allow-list only
         async with self.tenant_tx(ctx.tenant_id) as cur:
+            await self._fence(cur, ctx)
             await cur.execute(
                 f"UPDATE research_reports SET {assignments} WHERE id = %s",  # noqa: S608
                 (*[values[c] for c in columns], ctx.report_id),
             )
+
+    async def finish_report(
+        self,
+        ctx: ReportContext,
+        status: str,
+        event_type: str,
+        payload: dict[str, Any],
+        error: str | None = None,
+    ) -> None:
+        """Set the final status and write the terminal event in ONE transaction, so a report
+        that looks finished always has its terminal event (SSE streams close on that)."""
+        async with self.tenant_tx(ctx.tenant_id) as cur:
+            await self._fence(cur, ctx)
+            await cur.execute(
+                "UPDATE research_reports SET status = %s, completed_at = now(), error = %s"
+                " WHERE id = %s",
+                (status, error, ctx.report_id),
+            )
+            await self._event(cur, ctx, event_type, payload)
 
     async def ensure_evidence_set(self, ctx: ReportContext) -> UUID:
         """The report's own evidence set: the snapshot's documents, same order, labels d1..dn."""
@@ -309,6 +359,7 @@ class ResearchStore:
 
     async def event(self, ctx: ReportContext, type_: str, payload: dict[str, Any]) -> int:
         async with self.tenant_tx(ctx.tenant_id) as cur:
+            await self._fence(cur, ctx)
             return await self._event(cur, ctx, type_, payload)
 
     async def save_section(
@@ -317,6 +368,7 @@ class ResearchStore:
         """Persist a section, its claims, citations, usage and completion event atomically.
         Returns False if the section was already saved (a retried job), writing nothing."""
         async with self.tenant_tx(ctx.tenant_id) as cur:
+            await self._fence(cur, ctx)
             await cur.execute(
                 """
                 INSERT INTO research_sections (report_id, tenant_id, section, title, status,
