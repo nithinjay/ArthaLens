@@ -1,7 +1,8 @@
 """PostgreSQL persistence for ingestion (runs as the ``app_ai`` role).
 
 Parameterised SQL only (threat model T-13). Each IPO is saved in one transaction, so a
-failure never leaves a half-written snapshot.
+failure never leaves a half-written snapshot. Source documents go through the evidence
+ledger, which de-duplicates, versions and logs every retrieval.
 """
 
 import hashlib
@@ -15,6 +16,9 @@ from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
 
 from arthalens_ai.domain.resolve import ResolvedField
+from arthalens_ai.evidence.blobstore import BlobStore
+from arthalens_ai.evidence.ledger import EvidenceLedger, EvidenceRef, SourceRecord
+from arthalens_ai.evidence.sets import EvidenceSets
 from arthalens_ai.ingestion.models import LoadedDocument
 from arthalens_ai.ingestion.pipeline import RunStatus, SaveOutcome, SnapshotDraft
 from arthalens_ai.ingestion.searchport import Blocked
@@ -36,13 +40,17 @@ def slugify(normalized_name: str) -> str:
 
 
 class PostgresIngestionRepository:
-    def __init__(self, conn: psycopg.AsyncConnection[Any]) -> None:
+    def __init__(self, conn: psycopg.AsyncConnection[Any], blobs: BlobStore | None = None) -> None:
         self._conn = conn
+        self._ledger = EvidenceLedger(conn, blobs)
+        self._sets = EvidenceSets(conn)
 
     @classmethod
-    async def connect(cls, dsn: str) -> "PostgresIngestionRepository":
+    async def connect(
+        cls, dsn: str, blobs: BlobStore | None = None
+    ) -> "PostgresIngestionRepository":
         conn = await psycopg.AsyncConnection.connect(dsn, autocommit=True, connect_timeout=5)
-        return cls(conn)
+        return cls(conn, blobs)
 
     async def close(self) -> None:
         await self._conn.close()
@@ -92,6 +100,9 @@ class PostgresIngestionRepository:
 
     async def save_snapshot(self, run_id: UUID, draft: SnapshotDraft) -> SaveOutcome:
         async with self._conn.transaction(), self._conn.cursor(row_factory=dict_row) as cur:
+            # Evidence first, even when nothing changed: every retrieval is logged.
+            refs = {d.ref: await self._record_evidence(d, run_id) for d in draft.documents}
+
             await cur.execute(
                 """
                 INSERT INTO ipos (slug, company_name, normalized_name, policy_version, is_synthetic)
@@ -120,26 +131,36 @@ class PostgresIngestionRepository:
             if current and current["content_fingerprint"] == draft.fingerprint:
                 return SaveOutcome(ipo_id=ipo_id, version=current["version"], created=False)
 
-            evidence_ids = {d.ref: await self._insert_evidence(cur, d) for d in draft.documents}
-
             await cur.execute(
                 "SELECT coalesce(max(version), 0) + 1 AS v FROM ipo_snapshots WHERE ipo_id = %s",
                 (ipo_id,),
             )
-            version_row = _required(await cur.fetchone(), "version_row")
-            version: int = version_row["v"]
+            version: int = _required(await cur.fetchone(), "version")["v"]
+
+            # The snapshot's documents get stable labels d1, d2, ... in source order.
+            set_id = await self._sets.create("ipo_snapshot")
+            for d in draft.documents:
+                await self._sets.add(set_id, refs[d.ref].document_id)
 
             await cur.execute(
                 """
                 INSERT INTO ipo_snapshots (ipo_id, version, derived_status, status_as_of,
-                    content_fingerprint, ingestion_run_id)
-                VALUES (%s, %s, %s, %s, %s, %s) RETURNING id
+                    content_fingerprint, ingestion_run_id, evidence_set_id)
+                VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING id
                 """,
-                (ipo_id, version, draft.status, draft.status_as_of, draft.fingerprint, run_id),
+                (
+                    ipo_id,
+                    version,
+                    draft.status,
+                    draft.status_as_of,
+                    draft.fingerprint,
+                    run_id,
+                    set_id,
+                ),
             )
-            snap = _required(await cur.fetchone(), "snap")
-            snapshot_id: UUID = snap["id"]
+            snapshot_id: UUID = _required(await cur.fetchone(), "snapshot")["id"]
 
+            evidence_ids = {ref: r.document_id for ref, r in refs.items()}
             for resolved in draft.resolution.fields.values():
                 await self._insert_field(cur, snapshot_id, resolved, evidence_ids, draft)
 
@@ -148,45 +169,23 @@ class PostgresIngestionRepository:
             )
             return SaveOutcome(ipo_id=ipo_id, version=version, created=True)
 
-    @staticmethod
-    async def _insert_evidence(cur: psycopg.AsyncCursor[Any], d: LoadedDocument) -> UUID:
+    async def _record_evidence(self, d: LoadedDocument, run_id: UUID) -> EvidenceRef:
         s = d.spec
-        await cur.execute(
-            """
-            INSERT INTO evidence_documents (content_sha256, canonical_url, title, publisher,
-                published_at, retrieved_at, source_type, authority, retrieval_method, provider,
-                mime_type, byte_size, text_content, display_rights, is_synthetic)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-            ON CONFLICT (content_sha256, canonical_url) DO NOTHING
-            RETURNING id
-            """,
-            (
-                d.sha256,
-                s.url,
-                s.title,
-                s.publisher,
-                s.published_at,
-                d.retrieved_at,
-                s.source_type,
-                s.authority,
-                d.retrieval_method,
-                d.provider,
-                s.mime_type,
-                d.byte_size,
-                d.text,
-                s.display_rights,
-                d.is_synthetic,
-            ),
+        source = SourceRecord(
+            url=s.url,
+            title=s.title,
+            publisher=s.publisher,
+            published_at=s.published_at,
+            source_type=s.source_type,
+            authority=s.authority,
+            retrieval_method=d.retrieval_method,
+            provider=d.provider,
+            display_rights=s.display_rights,
+            is_synthetic=d.is_synthetic,
+            mime_type=s.mime_type,
+            request_metadata=d.request_metadata,
         )
-        row = await cur.fetchone()
-        if row is None:  # same document already stored: reuse it (append-only, no update)
-            await cur.execute(
-                "SELECT id FROM evidence_documents"
-                " WHERE content_sha256 = %s AND canonical_url = %s",
-                (d.sha256, s.url),
-            )
-            row = _required(await cur.fetchone(), "row")
-        return UUID(str(row["id"]))
+        return await self._ledger.record(source, d.content, d.extraction, d.retrieved_at, run_id)
 
     @staticmethod
     async def _insert_field(
@@ -200,8 +199,8 @@ class PostgresIngestionRepository:
         await cur.execute(
             """
             INSERT INTO ipo_snapshot_fields (snapshot_id, field, value, status, evidence_id,
-                evidence_quote, checked_at, note)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                evidence_quote, evidence_page, checked_at, note)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
             """,
             (
                 snapshot_id,
@@ -210,6 +209,7 @@ class PostgresIngestionRepository:
                 f.status,
                 evidence_ids[winner.doc.key] if winner else None,
                 winner.quote if winner else None,
+                winner.page if winner else None,
                 draft.checked_at,
                 f.note,
             ),
@@ -218,8 +218,9 @@ class PostgresIngestionRepository:
             await cur.execute(
                 """
                 INSERT INTO ipo_field_observations (snapshot_id, field, value, raw_value,
-                    evidence_id, evidence_quote, quote_verified, parse_error, observed_at)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    evidence_id, evidence_quote, evidence_page, quote_verified, parse_error,
+                    observed_at)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """,
                 (
                     snapshot_id,
@@ -228,6 +229,7 @@ class PostgresIngestionRepository:
                     o.raw_value,
                     evidence_ids[o.doc.key],
                     o.quote,
+                    o.page,
                     o.quote_verified,
                     o.parse_error,
                     draft.checked_at,

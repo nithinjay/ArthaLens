@@ -13,3 +13,4 @@
 | [decisions/](decisions/README.md) | Architecture Decision Records |
 | [runbooks/local-development.md](runbooks/local-development.md) | Setup, commands, troubleshooting |
 | [runbooks/ipo-ingestion.md](runbooks/ipo-ingestion.md) | Ingestion pipeline, field states, manual import |
+| [runbooks/evidence-ledger.md](runbooks/evidence-ledger.md) | Evidence tests, inspection queries, expected errors |

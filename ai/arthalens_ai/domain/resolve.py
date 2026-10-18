@@ -78,6 +78,8 @@ class EvidenceDoc:
     authority: Authority
     published_at: date | None
     text: str
+    # (page_number, text) per page; page_number is None for formats without pages.
+    pages: tuple[tuple[int | None, str], ...] = ()
 
 
 @dataclass(frozen=True)
@@ -99,6 +101,7 @@ class Observation:
     quote_verified: bool
     parse_error: str | None
     doc: EvidenceDoc
+    page: int | None = None  # page of the document where the quote was found
 
     @property
     def counts(self) -> bool:
@@ -115,7 +118,7 @@ class ResolvedField:
     observations: tuple[Observation, ...] = ()
 
 
-def _squash(text: str) -> str:
+def squash(text: str) -> str:
     return " ".join(n._clean(text).split()).casefold()
 
 
@@ -124,8 +127,8 @@ def quote_supports(quote: str, raw_value: str, doc_text: str) -> bool:
 
     Comparison ignores case, Unicode width and whitespace runs, nothing else.
     """
-    q = _squash(quote)
-    return bool(q) and q in _squash(doc_text) and _squash(raw_value) in q
+    q = squash(quote)
+    return bool(q) and q in squash(doc_text) and squash(raw_value) in q
 
 
 def expand(raw: RawObservation) -> list[Observation]:
@@ -134,6 +137,7 @@ def expand(raw: RawObservation) -> list[Observation]:
         raise ValueError(f"unknown raw field {raw.raw_field!r}")
     targets, parser = RAW_FIELDS[raw.raw_field]
     verified = quote_supports(raw.quote, raw.raw_value, raw.doc.text)
+    page = _page_of(raw.quote, raw.doc.pages) if verified else None
     error: str | None = None
     try:
         values: tuple[Any, ...] = parser(raw.raw_value)
@@ -148,9 +152,18 @@ def expand(raw: RawObservation) -> list[Observation]:
             quote_verified=verified,
             parse_error=error,
             doc=raw.doc,
+            page=page,
         )
         for f, v in zip(targets, values, strict=True)
     ]
+
+
+def _page_of(quote: str, pages: tuple[tuple[int | None, str], ...]) -> int | None:
+    needle = squash(quote)
+    for number, text in pages:
+        if number is not None and needle in squash(text):
+            return number
+    return None
 
 
 def _recency(o: Observation) -> date:

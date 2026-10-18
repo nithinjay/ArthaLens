@@ -118,6 +118,15 @@ def test_addendum_supersedes_original_notice(ingested: tuple[InMemoryRepo, RunRe
     assert close.note and "differ" in close.note
 
 
+def test_pdf_source_cites_the_page_of_its_quote(ingested: tuple[InMemoryRepo, RunReport]) -> None:
+    snap = ingested[0].latest("Synthetic Beta Logistics Limited")
+    fresh = snap.resolution.fields["fresh_issue_size"]
+    assert (fresh.status, fresh.value) == ("verified", str(2500 * 10**7 * 100))
+    assert fresh.winner is not None and fresh.winner.page == 2
+    rhp = next(d for d in snap.documents if d.ref == "rhp")
+    assert (rhp.extraction.method, rhp.extraction.page_count) == ("pdf_text", 3)
+
+
 def test_missing_fields_are_unavailable_not_guessed(
     ingested: tuple[InMemoryRepo, RunReport],
 ) -> None:

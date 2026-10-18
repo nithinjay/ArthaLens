@@ -12,9 +12,9 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from arthalens_ai.contracts.ipo import RetrievalMethod
+from arthalens_ai.evidence.extract import extract
 from arthalens_ai.ingestion.fetch import FetchError, GuardedFetcher
 from arthalens_ai.ingestion.models import Candidate, ImportDocument, IpoImport, LoadedDocument
-from arthalens_ai.ingestion.text import extract_text
 
 MAX_LOCAL_FILE_BYTES = 50 * 1024 * 1024
 
@@ -69,6 +69,7 @@ class FileImportProvider:
 
     async def _load(self, candidate: Candidate, spec: ImportDocument) -> LoadedDocument:
         method: RetrievalMethod = self.retrieval_method
+        metadata: dict[str, object] = {}
         if spec.fetch:
             if self._fetcher is None:
                 raise FetchError("fetch_disabled", "live fetching is not enabled for this provider")
@@ -78,18 +79,24 @@ class FileImportProvider:
                     "mime_mismatch", f"expected {spec.mime_type}, got {fetched.mime_type}"
                 )
             content, method = fetched.content, "live_fetch"
+            metadata = {
+                "final_url": fetched.url,
+                "content_type": fetched.mime_type,
+                "content_length": len(fetched.content),
+            }
         else:
             content = self._read_local(candidate.origin, spec.file or "")
         return LoadedDocument(
             ref=spec.ref,
             spec=spec,
             sha256=hashlib.sha256(content).hexdigest(),
-            byte_size=len(content),
-            text=extract_text(content, spec.mime_type),
+            content=content,
+            extraction=await extract(content, spec.mime_type),
             retrieved_at=self._clock.now(UTC),
             retrieval_method=method,
             provider=self.name,
             is_synthetic=candidate.data.synthetic,
+            request_metadata=metadata,
         )
 
     @staticmethod

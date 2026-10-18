@@ -35,11 +35,13 @@ export interface SourceRef {
 authority: ("official_exchange" | "official_regulator" | "issuer_filing" | "official_registrar" | "licensed_market_data" | "credible_news" | "unofficial")
 evidence_id: string
 is_synthetic: boolean
+page: (number | null)
 published_at: (string | null)
 publisher: string
-retrieval_method: ("mock_fixture" | "manual_import" | "live_fetch")
+retrieval_method: ("mock_fixture" | "manual_import" | "live_fetch" | "upload")
 title: string
 url: string
+version: number
 }
 export interface ExclusionNotice {
 code: "ENTITY_EXCLUDED"
@@ -270,6 +272,18 @@ export const IpoListSchema = {
           "title": "Is Synthetic",
           "type": "boolean"
         },
+        "page": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Page"
+        },
         "published_at": {
           "anyOf": [
             {
@@ -290,7 +304,8 @@ export const IpoListSchema = {
           "enum": [
             "mock_fixture",
             "manual_import",
-            "live_fetch"
+            "live_fetch",
+            "upload"
           ],
           "title": "Retrieval Method",
           "type": "string"
@@ -302,6 +317,11 @@ export const IpoListSchema = {
         "url": {
           "title": "Url",
           "type": "string"
+        },
+        "version": {
+          "minimum": 1,
+          "title": "Version",
+          "type": "integer"
         }
       },
       "required": [
@@ -312,7 +332,9 @@ export const IpoListSchema = {
         "published_at",
         "authority",
         "retrieval_method",
-        "is_synthetic"
+        "is_synthetic",
+        "version",
+        "page"
       ],
       "title": "SourceRef",
       "type": "object"

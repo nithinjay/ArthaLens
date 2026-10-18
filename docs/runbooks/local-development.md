@@ -20,7 +20,7 @@ pnpm install                 # frontend, backend, packages/*
 uv sync --project ai         # Python deps for ai/
 pnpm env:init                # creates .env with random local secrets (gitignored, chmod 600)
 docker compose up --build -d
-pnpm smoke                   # 44 checks: services, DB roles, RLS, ingestion, exclusion, IPO API
+pnpm smoke                   # 54 checks: services, DB roles, RLS, ingestion, exclusion, IPO API, evidence
 ```
 
 Then open http://localhost:8080. You should see **System status: All systems operational**.
@@ -42,7 +42,8 @@ Startup order is enforced by health checks: postgres (healthy) → migrate (exit
 | Hot-reload backend (stack's postgres + ai still in Docker) | `docker compose stop backend frontend`, then `pnpm dev:backend` with env vars from `.env` (see below) |
 | Hot-reload frontend | `pnpm dev:frontend` → http://localhost:5173 (proxies `/api` to :3000) |
 | All TS checks | `pnpm typecheck && pnpm lint && pnpm test` |
-| All Python checks | `cd ai && uv run ruff check . && uv run ruff format --check . && uv run mypy arthalens_ai tests && uv run pytest` |
+| All Python checks | `cd ai && uv run ruff check . && uv run ruff format --check . && uv run mypy arthalens_ai tests && uv run pytest` (OCR + DB tests skip on macOS) |
+| Full Python suite incl. OCR + DB integration (Linux container, throwaway DB) | `sh scripts/test-integration.sh` |
 | Regenerate contracts after changing a Pydantic model | `pnpm contracts:gen` (then `pnpm build`) |
 | Contract drift check (CI) | `pnpm contracts:check` |
 | New migration | add `database/migrations/<yyyymmddhhmmss>_<name>.sql` with `-- migrate:up` / `-- migrate:down`, then `docker compose up --build migrate` |
@@ -60,7 +61,7 @@ Put them in a gitignored `.env.local` at the repo root; `pnpm dev:backend` loads
 
 ## Expected results
 
-- `pnpm smoke` → `Smoke test: 44 passed, 0 failed`
+- `pnpm smoke` → `Smoke test: 54 passed, 0 failed`
 - `GET /readyz` on backend → `{"status":"ok", ...}`. Stop the AI service (`docker compose stop ai`) and it becomes `"degraded"` with HTTP 200; stop postgres and it becomes `"down"` with HTTP 503.
 
 ## Troubleshooting

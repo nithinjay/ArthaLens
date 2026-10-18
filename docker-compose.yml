@@ -38,6 +38,8 @@ services:
     build:
       context: .
       dockerfile: ai/Dockerfile
+      # Name the stage explicitly: the Dockerfile's last stage is the test image.
+      target: runtime
     environment:
       APP_ENV: development
       DATABASE_URL: postgresql://app_ai:${APP_AI_DB_PASSWORD}@postgres:5432/arthalens
@@ -45,6 +47,9 @@ services:
       LOG_LEVEL: ${LOG_LEVEL:-info}
       # Live SEBI document fetching is off unless you opt in (ADR-0015).
       PROVIDER_SEBI_FETCH_ENABLED: ${PROVIDER_SEBI_FETCH_ENABLED:-false}
+    volumes:
+      # Raw source snapshots, write-once and content-addressed (ADR-0016). Never served.
+      - evidence:/data/evidence
     # Published for local learning and the smoke test only. Production keeps it private.
     ports:
       - '127.0.0.1:8000:8000'
@@ -79,5 +84,17 @@ services:
       backend:
         condition: service_healthy
 
+  # Full Python suite incl. OCR and database integration tests: scripts/test-integration.sh
+  ai-test:
+    profiles: [test]
+    build:
+      context: .
+      dockerfile: ai/Dockerfile
+      target: test
+    depends_on:
+      postgres:
+        condition: service_healthy
+
 volumes:
   pgdata:
+  evidence:

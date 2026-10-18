@@ -3,7 +3,7 @@
 Evidence-grounded IPO research and stock intelligence for Indian markets (NSE/BSE).
 **Educational tool, not investment advice.** It never submits IPO applications or trades.
 
-> Status: **Milestone 2 (IPO data ingestion).** Synthetic and manually imported IPO data with per-field provenance, Jio exclusion at every layer, and `GET /api/v1/ipos`. No research reports or UI yet. See [docs/CHECKLIST.md](docs/CHECKLIST.md).
+> Status: **Milestone 3 (evidence ledger).** IPO data with per-field, per-page provenance; an immutable, versioned, tenant-isolated evidence ledger; sandboxed PDF parsing with OCR; Jio exclusion at every layer. No research reports or UI yet. See [docs/CHECKLIST.md](docs/CHECKLIST.md).
 
 ## Layout
 

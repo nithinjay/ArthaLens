@@ -44,7 +44,7 @@ Authority = Literal[
     "credible_news",
     "unofficial",
 ]
-RetrievalMethod = Literal["mock_fixture", "manual_import", "live_fetch"]
+RetrievalMethod = Literal["mock_fixture", "manual_import", "live_fetch", "upload"]
 FieldValue = str | int | list[str]
 
 
@@ -63,6 +63,10 @@ class SourceRef(_Contract):
     authority: Authority
     retrieval_method: RetrievalMethod
     is_synthetic: bool
+    # Version of this source (a re-published notice with new content is a new version).
+    version: int = Field(ge=1)
+    # Page of the document the quote was found on; None for formats without pages.
+    page: int | None = Field(ge=1)
 
 
 class IpoField(_Contract):

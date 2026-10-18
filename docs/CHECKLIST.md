@@ -37,7 +37,7 @@ _Last updated: 2026-10-18_
 - Authentication, sessions, rate limiting, CSRF → M8 (`users` table has no RLS yet; sign-in lookups need the M8 auth design)
 - CI pipeline (GitHub Actions) → M11, or earlier if you want it
 
-## Milestone 2: IPO data ingestion (awaiting your verification)
+## Milestone 2: IPO data ingestion (merged 2026-10-18, PR #2)
 
 | AC | Item | State | Evidence (run 2026-10-18) |
 |---|---|---|---|
@@ -67,6 +67,35 @@ Totals: pytest 236 · Vitest 99 (backend 61, policy 33, frontend 5) · smoke 44 
 - IPO identity is the normalised company name; a company that withdraws and refiles shares one IPO record.
 - The DB backstop is a coarse `jio` substring check; the precise matcher runs in the services.
 
+## Milestone 3: Evidence ledger (awaiting your verification)
+
+| AC | Item | State | Evidence (run 2026-10-18) |
+|---|---|---|---|
+| 3.1 | Evidence is append-only for every role incl. the table owner (UPDATE/DELETE/TRUNCATE refused) | tested | Integration tests (as `app_ai` and as owner); smoke (2 owner probes) |
+| 3.1 | Only exceptions: retention DELETE in an opted-in transaction; storage key NULL → value once | tested | `test_retention_purge_is_the_only_way_to_delete`, `test_retained_bytes_can_be_attached_once…` |
+| 3.1 | Label assignments and set counters can't be rewritten | tested | `test_label_assignments_cannot_be_rewritten` |
+| 3.2 | Same source + same bytes → one document, each retrieval logged | tested | Integration test; smoke (re-ingest → +12 retrievals, 0 duplicates) |
+| 3.2 | Changed bytes → new version with `supersedes_id`; reverting reuses the old version | tested | `test_changed_bytes_make_a_new_version_that_supersedes` |
+| 3.2 | Identical bytes from two sources share one content and one set of passages | tested | `test_identical_bytes_from_two_sources_share_one_content` |
+| 3.2 | Stable labels d1, d2, …: idempotent, gap-free under 6 concurrent writers | tested | `test_labels_are_stable_idempotent_and_gap_free_under_concurrency`; every snapshot has a labelled set (smoke) |
+| 3.3 | Page-level passages for PDFs; quotes located to a page; API cites the page | tested | Unit + integration; live API: Beta fresh issue → page 2 (smoke) |
+| 3.3 | OCR for scanned pages with stored confidence | tested (container) | `test_ocr.py` (4) against rendered scans, Tesseract 5.3.0 |
+| 3.4 | Tenant-private evidence invisible to other tenants (reader, passages, quote search, backend role) | tested | `test_private_evidence_is_invisible_to_other_tenants` |
+| 3.4 | A set can't cite another tenant's document, even with RLS bypassed | tested | `test_a_set_cannot_cite_another_tenants_document` |
+| 3.4 | A tenant can't write evidence as another tenant | tested | `test_a_tenant_cannot_write_evidence_as_another_tenant` |
+| T-21 | PDFs parsed in a sandboxed subprocess (timeouts, crashes, output cap, no inherited secrets, memory limit) | tested | 7 sandbox tests incl. memory limit (Linux container) |
+| — | Raw source bytes kept write-once by hash, integrity-checked on read, never served | tested | Blob store unit tests; smoke (every content retained; file count matches) |
+| — | Migration 4 backfills Milestone 2 data and reverses cleanly, with and without data | tested | Dev DB backfill (12 docs → 12 contents/passages/retrievals); roundtrip script; rollback with data |
+| — | Dev database recreated after amending migration 4 | done | Held only synthetic fixtures (6 IPOs, 0 non-synthetic); re-ingested |
+
+Totals: pytest 299 in the container (0 skipped; macOS skips 18 OCR/DB/Linux-only tests) · Vitest 99 · smoke 54 · migration roundtrip pass · secret scan clean.
+
+### Known limitations (Milestone 3)
+- Retention purging is manual SQL; the scheduled job and its policy come later.
+- OCR tests use clean rendered scans; real scanned prospectuses will have lower confidence. Confidence is stored so later milestones can down-weight it.
+- The PDF worker isn't network-isolated (container egress policy, M11).
+- No API endpoint serves evidence yet (`GET /research/{id}/evidence` arrives with reports in M4).
+
 ## Unverified assumptions to resolve
 - Indian IPO application rules in requirements §4 (verify against SEBI/RHP at M7).
 - BSE terms of use (treated as manual-only until reviewed).
@@ -75,7 +104,6 @@ Totals: pytest 236 · Vitest 99 (backend 61, policy 33, frontend 5) · smoke 44 
 ## Later milestones
 | Milestone | State |
 |---|---|
-| M3 Evidence ledger | planned |
 | M4 Research orchestration | planned |
 | M5 Validation & repair | planned |
 | M6 Research UI | planned |

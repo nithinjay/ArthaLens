@@ -21,3 +21,6 @@ class IngestionSettings(BaseSettings):
     # Live fetching is off unless explicitly enabled (source-provider strategy, principle 4).
     sebi_fetch_enabled: bool = Field(default=False, alias="PROVIDER_SEBI_FETCH_ENABLED")
     log_level: str = Field(default="info", alias="LOG_LEVEL")
+    # Where raw source snapshots are kept (write-once, by hash). Unset: bytes aren't retained,
+    # only hashes, metadata and passages (brief section 9 allows either).
+    evidence_blob_dir: Path | None = Field(default=None, alias="EVIDENCE_BLOB_DIR")

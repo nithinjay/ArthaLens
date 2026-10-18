@@ -25,6 +25,8 @@ const SOURCE = {
   authority: 'official_exchange',
   retrieval_method: 'mock_fixture',
   is_synthetic: true,
+  version: 1,
+  page: null,
 } as const;
 
 export function field(value: IpoField['value'], status: IpoField['status'] = 'verified'): IpoField {

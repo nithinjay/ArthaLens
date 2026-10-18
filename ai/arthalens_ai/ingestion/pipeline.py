@@ -71,7 +71,11 @@ class RunReport:
 def build_observations(candidate: Candidate, docs: list[LoadedDocument]) -> list[RawObservation]:
     by_ref = {
         d.ref: EvidenceDoc(
-            key=d.ref, authority=d.spec.authority, published_at=d.spec.published_at, text=d.text
+            key=d.ref,
+            authority=d.spec.authority,
+            published_at=d.spec.published_at,
+            text=d.text,
+            pages=d.extraction.page_texts(),
         )
         for d in docs
     }
@@ -93,6 +97,7 @@ def fingerprint(resolution: Resolution, status: IpoStatus, docs: list[LoadedDocu
                 f.value,
                 sha_by_ref[f.winner.doc.key] if f.winner else None,
                 f.winner.quote if f.winner else None,
+                f.winner.page if f.winner else None,
                 f.note,
             ]
             for name, f in sorted(resolution.fields.items())

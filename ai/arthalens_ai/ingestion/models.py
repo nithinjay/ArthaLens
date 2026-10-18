@@ -5,14 +5,16 @@ which document it came from and a *verbatim quote* from that document. The pipel
 the quote against the document text before anything is marked verified.
 """
 
+from dataclasses import dataclass, field
 from datetime import date, datetime
 from pathlib import Path
-from typing import Literal, Self
+from typing import Any, Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from arthalens_ai.contracts.ipo import Authority, RetrievalMethod
 from arthalens_ai.domain.resolve import RAW_FIELDS
+from arthalens_ai.evidence.extract import Extraction
 from arthalens_ai.policy.exclusion import Identifiers
 
 SourceType = Literal[
@@ -98,15 +100,21 @@ class Candidate(_Strict):
         return self.data.documents[0].url
 
 
-class LoadedDocument(_Strict):
-    """A source document with its bytes hashed and text extracted."""
+@dataclass(frozen=True)
+class LoadedDocument:
+    """A source document: its raw bytes, page-anchored text and how it was retrieved."""
 
     ref: str
     spec: ImportDocument
     sha256: str
-    byte_size: int
-    text: str
+    content: bytes
+    extraction: Extraction
     retrieved_at: datetime
     retrieval_method: RetrievalMethod
     provider: str
     is_synthetic: bool
+    request_metadata: dict[str, Any] = field(default_factory=dict)
+
+    @property
+    def text(self) -> str:
+        return self.extraction.text

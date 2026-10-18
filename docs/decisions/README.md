@@ -19,5 +19,6 @@ Format: Context → Decision → Consequences → Alternatives considered. ADRs 
 | [0013](0013-frontend-stack.md) | Frontend component, form and chart libraries | Accepted |
 | [0014](0014-milestone-1-implementation-refinements.md) | Milestone 1 implementation refinements | Accepted |
 | [0015](0015-source-access-and-request-validation.md) | Source access per provider; JSON Schema request validation | Accepted |
+| [0016](0016-evidence-ledger.md) | Evidence ledger: content-addressed, versioned, immutable, tenant-isolated | Accepted |
 
 All accepted on 2026-10-17 (Milestone 0 approval). Changes go in new, superseding ADRs.

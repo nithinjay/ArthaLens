@@ -134,6 +134,36 @@ psql_as app_migrate "$APP_MIGRATE_DB_PASSWORD" "DELETE FROM audit_events WHERE t
 check "unknown IPO id → 404" "$(code "$API/00000000-0000-4000-8000-000000000999")" 404
 check "IPO list through the frontend proxy → 200" "$(code http://127.0.0.1:8080/api/v1/ipos)" 200
 
+echo "Evidence ledger (Milestone 3)"
+adm() { psql_as app_migrate "$APP_MIGRATE_DB_PASSWORD" "$1"; }
+BEFORE=$(adm "SELECT count(*) FROM evidence_retrievals")
+docker compose exec -T ai python -m arthalens_ai.ingestion.cli discover >/dev/null 2>&1
+AFTER=$(adm "SELECT count(*) FROM evidence_retrievals")
+check "re-ingesting logs 12 more retrievals" "$((AFTER - BEFORE))" 12
+check "re-ingesting creates no duplicate documents" "$(adm "SELECT count(*) - count(DISTINCT (source_key, content_sha256)) FROM evidence_documents")" 0
+check "every content has its bytes retained" "$(adm "SELECT count(*) FROM evidence_contents WHERE storage_key IS NULL")" 0
+check "retained bytes exist on the evidence volume" \
+  "$(docker compose exec -T ai sh -c 'find /data/evidence -type f | wc -l' | tr -d ' ')" "$(adm "SELECT count(*) FROM evidence_contents")"
+check "every snapshot has an evidence set with labels d1.." \
+  "$(adm "SELECT count(*) FROM ipo_snapshots s WHERE NOT EXISTS (SELECT 1 FROM evidence_set_items i WHERE i.set_id = s.evidence_set_id AND i.label = 'd1')")" 0
+case "$(adm "UPDATE evidence_documents SET title = 'tampered'" 2>&1)" in
+  *EVIDENCE_IMMUTABLE*) pass "evidence can't be edited even by the table owner" ;;
+  *) fail "evidence can't be edited even by the table owner" ;;
+esac
+case "$(adm "DELETE FROM evidence_passages" 2>&1)" in
+  *EVIDENCE_IMMUTABLE*) pass "passages can't be deleted even by the table owner" ;;
+  *) fail "passages can't be deleted even by the table owner" ;;
+esac
+case "$(psql_as app_api "$APP_API_DB_PASSWORD" 'SELECT count(*) FROM evidence_passages' 2>&1)" in
+  *"permission denied"*) pass "backend role can't read stored passage text" ;;
+  *) fail "backend role can't read stored passage text" ;;
+esac
+BETA=$(body "$API?q=beta")
+check "PDF-sourced field cites its page (Beta fresh issue → p.2)" \
+  "$(js "$BETA" "d['items'][0]['fields']['fresh_issue_size']['source']['page']")" 2
+check "every verified field cites a document version" \
+  "$(js "$LIST" "all(f['source']['version'] >= 1 for i in d['items'] for f in i['fields'].values() if f['status']=='verified')")" True
+
 echo
 echo "Smoke test: $PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ]

@@ -30,11 +30,13 @@ export interface SourceRef {
 authority: ("official_exchange" | "official_regulator" | "issuer_filing" | "official_registrar" | "licensed_market_data" | "credible_news" | "unofficial")
 evidence_id: string
 is_synthetic: boolean
+page: (number | null)
 published_at: (string | null)
 publisher: string
-retrieval_method: ("mock_fixture" | "manual_import" | "live_fetch")
+retrieval_method: ("mock_fixture" | "manual_import" | "live_fetch" | "upload")
 title: string
 url: string
+version: number
 }
 /**
  * One source's claim about one field, including ones that lost or disagreed.
@@ -255,6 +257,18 @@ export const IpoDetailSchema = {
           "title": "Is Synthetic",
           "type": "boolean"
         },
+        "page": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Page"
+        },
         "published_at": {
           "anyOf": [
             {
@@ -275,7 +289,8 @@ export const IpoDetailSchema = {
           "enum": [
             "mock_fixture",
             "manual_import",
-            "live_fetch"
+            "live_fetch",
+            "upload"
           ],
           "title": "Retrieval Method",
           "type": "string"
@@ -287,6 +302,11 @@ export const IpoDetailSchema = {
         "url": {
           "title": "Url",
           "type": "string"
+        },
+        "version": {
+          "minimum": 1,
+          "title": "Version",
+          "type": "integer"
         }
       },
       "required": [
@@ -297,7 +317,9 @@ export const IpoDetailSchema = {
         "published_at",
         "authority",
         "retrieval_method",
-        "is_synthetic"
+        "is_synthetic",
+        "version",
+        "page"
       ],
       "title": "SourceRef",
       "type": "object"
