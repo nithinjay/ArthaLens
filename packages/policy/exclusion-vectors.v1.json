@@ -1,0 +1,62 @@
+{
+  "description": "Shared truth table for the exclusion matcher. The TypeScript and Python matchers must both produce these results. Names are matcher inputs only; none of them is ever given a research workflow.",
+  "policy_version": 1,
+  "vectors": [
+    { "name": "Jio Platforms Limited", "decision": "excluded", "reason": "token" },
+    { "name": "JIO PLATFORMS LTD.", "decision": "excluded", "reason": "token" },
+    { "name": "Reliance Jio Infocomm Limited", "decision": "excluded", "reason": "token" },
+    { "name": "jio", "decision": "excluded", "reason": "token" },
+    { "name": "  Jio  ", "decision": "excluded", "reason": "token" },
+    { "name": "Jio-Platforms", "decision": "excluded", "reason": "token" },
+    {
+      "name": "\uff2a\uff49\uff4f Platforms",
+      "decision": "excluded",
+      "reason": "token",
+      "note": "full-width letters; NFKC folds them"
+    },
+    {
+      "name": "J\u200bio Platforms",
+      "decision": "excluded",
+      "reason": "token",
+      "note": "zero-width space removed"
+    },
+    {
+      "name": "Jio\u00adPlatforms",
+      "decision": "quarantined",
+      "reason": "embedded",
+      "note": "soft hyphen (invisible) removed, leaving the single token 'jioplatforms'"
+    },
+    { "name": "JioPlatforms", "decision": "quarantined", "reason": "embedded" },
+    { "name": "J.I.O. Platforms", "decision": "quarantined", "reason": "embedded" },
+    { "name": "J I O Platforms", "decision": "quarantined", "reason": "embedded" },
+    { "name": "Jiomart Digital Limited", "decision": "quarantined", "reason": "embedded" },
+    { "name": "Ajio Fashion Retail", "decision": "quarantined", "reason": "embedded" },
+    { "name": "J1O Platforms", "decision": "quarantined", "reason": "confusable" },
+    { "name": "JI0 Digital", "decision": "quarantined", "reason": "confusable" },
+    { "name": "Jl0 Networks", "decision": "quarantined", "reason": "confusable" },
+    {
+      "name": "\u0408io Platforms",
+      "decision": "quarantined",
+      "reason": "confusable",
+      "note": "Cyrillic capital Je"
+    },
+    {
+      "name": "J\u0456\u043e Platforms",
+      "decision": "quarantined",
+      "reason": "confusable",
+      "note": "Cyrillic i and o"
+    },
+    {
+      "name": "Rajio Technologies",
+      "decision": "quarantined",
+      "reason": "embedded",
+      "note": "known false positive; fail closed, add an allow entry if ever needed"
+    },
+    { "name": "Synthetic Alpha Foods Limited", "decision": "allowed", "reason": null },
+    { "name": "Jindal Steel and Power", "decision": "allowed", "reason": null },
+    { "name": "Reliance Industries Limited", "decision": "allowed", "reason": null },
+    { "name": "Raj Iron Ore Mining", "decision": "allowed", "reason": null },
+    { "name": "Major Infra Organics", "decision": "allowed", "reason": null },
+    { "name": "Bajaj Housing Finance", "decision": "allowed", "reason": null }
+  ]
+}

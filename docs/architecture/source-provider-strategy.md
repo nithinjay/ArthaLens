@@ -1,6 +1,6 @@
 # Source-Provider Strategy
 
-> Milestone 0 · Status: **design; no provider has been integrated or verified yet**
+> Milestone 0 · Updated Milestone 2 (2026-10-18): terms reviewed and decisions recorded in [ADR-0015](../decisions/0015-source-access-and-request-validation.md). Implemented: synthetic fixtures, manual import, guarded SEBI document fetch (off by default, mock-tested only).
 
 ## 1. Principles
 
@@ -77,7 +77,7 @@ Every adapter must:
 
 | Milestone | Providers |
 |---|---|
-| M2 | `MockExchangeProvider`, `MockOfferDocumentProvider` (synthetic), `ManualImportProvider`; first live candidate: SEBI offer-document fetch (after ToS review) |
+| M2 (done) | `fixtures` (synthetic), `manual` import, guarded SEBI single-document fetch behind `PROVIDER_SEBI_FETCH_ENABLED` (ADR-0015). NSE: no automated adapter, terms forbid it. BSE: manual until reviewed |
 | M2–M4 | Exchange data through licensed vendor **or** manual import (decision needed: budget for a vendor) |
 | M4 | Document parsing + OCR for RHP PDFs |
 | M9 | Market data + news provider(s) (decision needed) |

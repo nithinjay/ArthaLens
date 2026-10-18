@@ -20,10 +20,11 @@ pnpm install                 # frontend, backend, packages/*
 uv sync --project ai         # Python deps for ai/
 pnpm env:init                # creates .env with random local secrets (gitignored, chmod 600)
 docker compose up --build -d
-pnpm smoke                   # 20 checks across all services, the database and RLS
+pnpm smoke                   # 44 checks: services, DB roles, RLS, ingestion, exclusion, IPO API
 ```
 
 Then open http://localhost:8080. You should see **System status: All systems operational**.
+`pnpm smoke` also ingests the synthetic IPO fixtures; see [ipo-ingestion.md](ipo-ingestion.md).
 
 | Service | URL (127.0.0.1 only) | What it is |
 |---|---|---|
@@ -47,6 +48,8 @@ Startup order is enforced by health checks: postgres (healthy) → migrate (exit
 | New migration | add `database/migrations/<yyyymmddhhmmss>_<name>.sql` with `-- migrate:up` / `-- migrate:down`, then `docker compose up --build migrate` |
 | Prove migrations reverse cleanly | `sh scripts/check-migrations.sh` (uses a throwaway DB) |
 | Secret scan | `pnpm secrets:scan` (scans exactly the files git would commit) |
+| Ingest synthetic IPOs | `docker compose exec ai python -m arthalens_ai.ingestion.cli discover` |
+| List IPOs | `curl 'localhost:3000/api/v1/ipos?status=open'` |
 | psql as the API role | `docker compose exec postgres psql -h 127.0.0.1 -U app_api -d arthalens` (password in `.env`) |
 | Stop | `docker compose down` · wipe data too: `docker compose down -v` |
 
@@ -57,7 +60,7 @@ Put them in a gitignored `.env.local` at the repo root; `pnpm dev:backend` loads
 
 ## Expected results
 
-- `pnpm smoke` → `Smoke test: 20 passed, 0 failed`
+- `pnpm smoke` → `Smoke test: 44 passed, 0 failed`
 - `GET /readyz` on backend → `{"status":"ok", ...}`. Stop the AI service (`docker compose stop ai`) and it becomes `"degraded"` with HTTP 200; stop postgres and it becomes `"down"` with HTTP 503.
 
 ## Troubleshooting

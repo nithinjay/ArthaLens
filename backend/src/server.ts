@@ -1,10 +1,14 @@
+import { loadPolicy } from '@arthalens/policy';
 import { AiClient } from './aiClient.js';
 import { buildApp } from './app.js';
 import { ConfigError, loadConfig } from './config.js';
 import { checkDatabase, createPool } from './db.js';
+import { PgIpoRepository } from './ipos/repository.js';
 
 async function main(): Promise<void> {
   const config = loadConfig();
+  // Fail closed: the service refuses to start without a valid exclusion policy.
+  const policy = loadPolicy();
   const pool = createPool(config.DATABASE_URL, config.DEPENDENCY_TIMEOUT_MS);
   const ai = new AiClient({
     baseUrl: config.AI_SERVICE_URL,
@@ -17,6 +21,7 @@ async function main(): Promise<void> {
       checkDatabase: () => checkDatabase(pool),
       checkAi: (requestId) => ai.checkHealth(requestId),
     },
+    ipos: { repo: new PgIpoRepository(pool), policy },
   });
 
   const shutdown = async (signal: string): Promise<void> => {

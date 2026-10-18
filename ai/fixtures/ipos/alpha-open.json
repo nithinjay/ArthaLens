@@ -1,0 +1,113 @@
+{
+  "schema": "arthalens.ipo-import.v1",
+  "synthetic": true,
+  "company_name": "Synthetic Alpha Foods Limited",
+  "documents": [
+    {
+      "ref": "notice",
+      "file": "docs/alpha-notice.txt",
+      "url": "https://fixtures.arthalens.test/alpha-notice.txt",
+      "title": "[SYNTHETIC] IPO notice: Alpha Foods",
+      "publisher": "SYNTHETIC FIXTURE (not a real exchange)",
+      "published_at": "2026-10-10",
+      "authority": "official_exchange",
+      "source_type": "exchange_notice",
+      "mime_type": "text/plain"
+    },
+    {
+      "ref": "rhp",
+      "file": "docs/alpha-rhp.txt",
+      "url": "https://fixtures.arthalens.test/alpha-rhp.txt",
+      "title": "[SYNTHETIC] RHP excerpt: Alpha Foods",
+      "publisher": "SYNTHETIC FIXTURE (fictional issuer)",
+      "published_at": "2026-10-08",
+      "authority": "issuer_filing",
+      "source_type": "offer_document",
+      "mime_type": "text/plain"
+    }
+  ],
+  "fields": {
+    "open_date": [
+      {
+        "value": "Friday, October 16, 2026",
+        "source": "notice",
+        "quote": "Bid/Offer Opens On: Friday, October 16, 2026"
+      }
+    ],
+    "close_date": [
+      {
+        "value": "Tuesday, October 20, 2026",
+        "source": "notice",
+        "quote": "Bid/Offer Closes On: Tuesday, October 20, 2026"
+      }
+    ],
+    "price_band": [
+      {
+        "value": "\u20b9285 to \u20b9300",
+        "source": "notice",
+        "quote": "Price Band: \u20b9285 to \u20b9300 per equity share"
+      }
+    ],
+    "lot_size": [
+      {
+        "value": "50 Equity Shares",
+        "source": "notice",
+        "quote": "Minimum Bid Lot: 50 Equity Shares and in multiples thereof"
+      },
+      {
+        "value": "50 Equity Shares",
+        "source": "rhp",
+        "quote": "Minimum Bid Lot: 50 Equity Shares"
+      }
+    ],
+    "listing_date": [
+      {
+        "value": "23 October 2026",
+        "source": "notice",
+        "quote": "Tentative listing date: 23 October 2026"
+      }
+    ],
+    "listing_date_basis": [
+      {
+        "value": "Tentative",
+        "source": "notice",
+        "quote": "Tentative listing date"
+      }
+    ],
+    "issue_size": [
+      {
+        "value": "\u20b91,200 crore",
+        "source": "rhp",
+        "quote": "Total issue size of \u20b91,200 crore"
+      }
+    ],
+    "fresh_issue_size": [
+      {
+        "value": "\u20b9800 crore",
+        "source": "rhp",
+        "quote": "Fresh Issue aggregating up to \u20b9800 crore"
+      }
+    ],
+    "ofs_size": [
+      {
+        "value": "\u20b9400 crore",
+        "source": "rhp",
+        "quote": "Offer for Sale aggregating up to \u20b9400 crore"
+      }
+    ],
+    "exchanges": [
+      {
+        "value": "NSE and BSE",
+        "source": "notice",
+        "quote": "Listing: NSE and BSE"
+      }
+    ],
+    "issue_type": [
+      {
+        "value": "Mainboard",
+        "source": "notice",
+        "quote": "Issue type: Mainboard"
+      }
+    ]
+  }
+}

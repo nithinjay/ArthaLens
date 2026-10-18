@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "updated": "2026-10-18",
+  "rules": [
+    {
+      "rule_id": "EXCL-JIO-001",
+      "scope": ["ipo"],
+      "reason": "Product policy: the Jio IPO is excluded from ArthaLens (PROJECT_BRIEF §2, ADR-0008).",
+      "user_message": "This IPO is excluded from ArthaLens by product policy. No research, calculations or alerts are available for it.",
+      "match": {
+        "tokens": ["jio"],
+        "aliases": ["reliance jio", "jio platforms", "reliance jio infocomm", "jio infocomm"],
+        "identifiers": { "isin": [], "cin": [], "nse_symbol": [], "bse_code": [] }
+      }
+    }
+  ],
+  "allow": []
+}

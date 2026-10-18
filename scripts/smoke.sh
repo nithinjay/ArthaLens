@@ -90,6 +90,50 @@ DELETE FROM memberships WHERE tenant_id IN ('00000000-0000-4000-8000-00000000000
 DELETE FROM tenants WHERE id IN ('00000000-0000-4000-8000-00000000000a','00000000-0000-4000-8000-00000000000b');
 DELETE FROM users WHERE email IN ('smoke-a@example.test','smoke-b@example.test');" >/dev/null
 
+echo "IPO ingestion (Milestone 2, synthetic fixtures)"
+RUN=$(docker compose exec -T ai python -m arthalens_ai.ingestion.cli discover 2>/dev/null | tail -n 1)
+js() { printf '%s' "$1" | python3 -c "import json,sys; d=json.load(sys.stdin); print($2)" 2>/dev/null; }
+check "fixture ingestion run succeeds" "$(js "$RUN" "d['status']")" succeeded
+check "two excluded/look-alike entities quarantined" "$(js "$RUN" "d['quarantined']")" 2
+check "no IPO name containing 'jio' stored" \
+  "$(psql_as app_migrate "$APP_MIGRATE_DB_PASSWORD" "SELECT count(*) FROM ipos WHERE replace(normalized_name,' ','') ~ 'jio|j1o'")" 0
+check "Jio entity recorded in quarantine" \
+  "$(psql_as app_migrate "$APP_MIGRATE_DB_PASSWORD" "SELECT count(*) FROM quarantined_entities WHERE raw_name LIKE 'Jio Platforms%'")" 1
+
+API=http://127.0.0.1:3000/api/v1/ipos
+LIST=$(body "$API")
+check "list returns the 6 synthetic IPOs" "$(js "$LIST" "len(d['items'])")" 6
+check "every verified field has source, quote and check time" "$(js "$LIST" "all(f['source'] and f['quote'] and f['checked_at'] for i in d['items'] for f in i['fields'].values() if f['status']=='verified')")" True
+check "no value is shown for conflict/unavailable fields" "$(js "$LIST" "all(f['value'] is None for i in d['items'] for f in i['fields'].values() if f['status'] in ('conflict','unavailable'))")" True
+check "every item is marked synthetic" "$(js "$LIST" "all(i['is_synthetic'] for i in d['items'])")" True
+check "status=open → only Alpha" "$(js "$(body "$API?status=open")" "','.join(i['company_name'] for i in d['items'])")" "Synthetic Alpha Foods Limited"
+check "issue_type=sme → only Gamma" "$(js "$(body "$API?issue_type=sme")" "','.join(i['company_name'] for i in d['items'])")" "Synthetic Gamma Textiles Limited"
+P1=$(body "$API?limit=4")
+CURSOR=$(js "$P1" "d['next_cursor']")
+check "pagination: page 2 holds the remaining 2" "$(js "$(body "$API?limit=4&cursor=$CURSOR")" "len(d['items'])")" 2
+for term in jio "Jio%20Platforms" "J1O" "reliance%20jio"; do
+  R=$(body "$API?q=$term")
+  check "search '$term' → 0 items + ENTITY_EXCLUDED notice" "$(js "$R" "str(len(d['items'])) + ' ' + d['notice']['code']")" "0 ENTITY_EXCLUDED"
+done
+check "search 'alpha' → 1 item" "$(js "$(body "$API?q=alpha")" "len(d['items'])")" 1
+
+EPS=$(js "$LIST" "[i['id'] for i in d['items'] if 'Epsilon' in i['company_name']][0]")
+DET=$(body "$API/$EPS")
+check "detail: Epsilon lot size is a conflict" "$(js "$DET" "d['fields']['lot_size']['status']")" conflict
+# 2 open + 2 close + 2 lot size + 2 price bands x (low, high) = 10
+check "detail: every source observation is listed" "$(js "$DET" "len(d['observations'])")" 10
+
+WID=00000000-0000-4000-8000-0000000000dd
+psql_as app_migrate "$APP_MIGRATE_DB_PASSWORD" "INSERT INTO ipos (id, slug, company_name, normalized_name, policy_version, exclusion_status) VALUES ('$WID','smoke-withdrawn','Smoke Withdrawn Entity','smoke withdrawn entity',1,'withdrawn_by_policy') ON CONFLICT (id) DO NOTHING" >/dev/null
+check "direct access to a policy-withdrawn IPO → 403" "$(code "$API/$WID")" 403
+check "403 carries code ENTITY_EXCLUDED" "$(js "$(body "$API/$WID")" "d['code']")" ENTITY_EXCLUDED
+check "blocked access is audited" \
+  "$(psql_as app_migrate "$APP_MIGRATE_DB_PASSWORD" "SELECT (count(*) > 0)::text FROM audit_events WHERE action='policy.exclusion_blocked' AND target_id='$WID'")" true
+check "withdrawn IPO is absent from the list" "$(js "$(body "$API")" "'$WID' in [i['id'] for i in d['items']]")" False
+psql_as app_migrate "$APP_MIGRATE_DB_PASSWORD" "DELETE FROM audit_events WHERE target_id='$WID'; DELETE FROM ipos WHERE id='$WID'" >/dev/null
+check "unknown IPO id → 404" "$(code "$API/00000000-0000-4000-8000-000000000999")" 404
+check "IPO list through the frontend proxy → 200" "$(code http://127.0.0.1:8080/api/v1/ipos)" 200
+
 echo
 echo "Smoke test: $PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ]
