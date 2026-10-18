@@ -20,7 +20,8 @@ pnpm install                 # frontend, backend, packages/*
 uv sync --project ai         # Python deps for ai/
 pnpm env:init                # creates .env with random local secrets (gitignored, chmod 600)
 docker compose up --build -d
-pnpm smoke                   # 54 checks: services, DB roles, RLS, ingestion, exclusion, IPO API, evidence
+sh scripts/seed-dev.sh       # dev tenant + user for AUTH_MODE=dev (until Milestone 8)
+pnpm smoke                   # 70 checks: services, DB, RLS, ingestion, exclusion, evidence, research + SSE
 ```
 
 Then open http://localhost:8080. You should see **System status: All systems operational**.
@@ -61,7 +62,7 @@ Put them in a gitignored `.env.local` at the repo root; `pnpm dev:backend` loads
 
 ## Expected results
 
-- `pnpm smoke` → `Smoke test: 54 passed, 0 failed`
+- `pnpm smoke` → `Smoke test: 70 passed, 0 failed`
 - `GET /readyz` on backend → `{"status":"ok", ...}`. Stop the AI service (`docker compose stop ai`) and it becomes `"degraded"` with HTTP 200; stop postgres and it becomes `"down"` with HTTP 503.
 
 ## Troubleshooting

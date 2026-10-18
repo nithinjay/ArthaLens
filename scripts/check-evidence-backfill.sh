@@ -13,7 +13,14 @@ DB=arthalens_backfill
 URL="postgres://app_migrate:${APP_MIGRATE_DB_PASSWORD}@postgres:5432/${DB}?sslmode=disable"
 as_super() { docker compose exec -T postgres psql -U postgres -d "$1" -v ON_ERROR_STOP=1 -qtAc "$2"; }
 q() { as_super "$DB" "$1"; }
-dbmate() { docker compose run --rm --no-deps -e DATABASE_URL="$URL" --entrypoint sh migrate -c "$1" >/dev/null; }
+# Run dbmate against only the migrations up to and including $1 (each run is a fresh
+# container, so the subset directory is rebuilt every time).
+dbmate_upto() {
+  docker compose run --rm --no-deps -e DATABASE_URL="$URL" --entrypoint sh migrate -c \
+    "mkdir -p /tmp/m && for f in /db/migrations/*.sql; do b=\$(basename \"\$f\"); [ \"\$b\" \\< \"${1}_~\" ] && cp \"\$f\" /tmp/m/; done; dbmate --migrations-dir /tmp/m --no-dump-schema $2" >/dev/null
+}
+M2_LAST=20261018000001     # last Milestone 2 migration
+LEDGER=20261018000002      # the evidence ledger migration under test
 cleanup() { as_super postgres "DROP DATABASE IF EXISTS $DB WITH (FORCE)" >/dev/null 2>&1 || true; }
 trap cleanup EXIT
 FAIL=0
@@ -24,8 +31,8 @@ cleanup
 as_super postgres "CREATE DATABASE $DB OWNER app_migrate"
 q "REVOKE ALL ON SCHEMA public FROM PUBLIC; GRANT USAGE ON SCHEMA public TO app_api, app_ai;"
 
-# Migrate only up to Milestone 2 (everything before the evidence ledger).
-dbmate 'mkdir -p /tmp/m2 && for f in /db/migrations/*.sql; do case "$f" in *20261018000002*) ;; *) cp "$f" /tmp/m2/ ;; esac; done && dbmate --migrations-dir /tmp/m2 --no-dump-schema up'
+# Migrate only up to Milestone 2.
+dbmate_upto "$M2_LAST" up
 
 LONG=$(python3 -c "print('SYNTHETIC ' + 'x' * 8990)")
 q "INSERT INTO evidence_documents (content_sha256, canonical_url, title, publisher, retrieved_at,
@@ -40,7 +47,7 @@ q "INSERT INTO evidence_documents (content_sha256, canonical_url, title, publish
     'issuer_filing', 'mock_fixture', 't', 'text/plain', 9000, '$LONG', 'excerpt', true, '2026-10-02')"
 
 echo "== migrate Milestone 2 data to the evidence ledger"
-dbmate 'dbmate --migrations-dir /db/migrations --no-dump-schema up'
+dbmate_upto "$LEDGER" up
 EXPECTED_KEY=$(cd ai && uv run python -c "from arthalens_ai.evidence.canonical import source_key; print(source_key('https://X.test/notice?b=2&a=1&utm_source=m'))")
 check "same URL, two contents -> versions 1,2" "$(q "SELECT string_agg(version::text, ',' ORDER BY version) FROM evidence_documents WHERE title IN ('v1','v2')")" "1,2"
 check "v2 supersedes v1" "$(q "SELECT (d2.supersedes_id = d1.id)::text FROM evidence_documents d1, evidence_documents d2 WHERE d1.title='v1' AND d2.title='v2'")" "true"
@@ -54,7 +61,7 @@ q "INSERT INTO evidence_documents (content_sha256, canonical_url, source_key, ve
      retrieved_at, source_type, authority, retrieval_method, provider, display_rights, visibility, tenant_id)
    VALUES (repeat('a', 64), 'https://x.test/private', 'upload:$TENANT:' || repeat('a', 64), 1, 'private', 'p',
      now(), 'other', 'unofficial', 'upload', 't', 'excerpt', 'tenant', '$TENANT')"
-if dbmate 'dbmate --migrations-dir /db/migrations --no-dump-schema rollback' 2>/dev/null; then
+if dbmate_upto "$LEDGER" rollback 2>/dev/null; then
   echo "  FAIL rollback with tenant evidence should have been refused"; FAIL=1
 else
   check "rollback refused; tenant evidence still private" "$(q "SELECT visibility FROM evidence_documents WHERE title='private'")" "tenant"
@@ -62,7 +69,7 @@ fi
 
 echo "== rollback succeeds when the data fits the old shape"
 q "BEGIN; SET LOCAL arthalens.evidence_retention = 'on'; DELETE FROM evidence_documents WHERE title = 'private'; COMMIT;"
-dbmate 'dbmate --migrations-dir /db/migrations --no-dump-schema rollback'
+dbmate_upto "$LEDGER" rollback
 check "text restored after rollback" "$(q "SELECT length(text_content) FROM evidence_documents WHERE canonical_url = 'https://x.test/long'")" "9000"
 
 [ "$FAIL" -eq 0 ] && echo "PASS: evidence backfill" || { echo "FAIL: evidence backfill"; exit 1; }

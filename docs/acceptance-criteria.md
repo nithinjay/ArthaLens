@@ -40,7 +40,7 @@
 - AC-4.2 SSE: events arrive in order; disconnect + reconnect with `Last-Event-ID` resumes with no gaps or duplicates; page reload after completion shows the final state.
 - AC-4.3 Worker killed mid-job → job reclaimed → no duplicate sections/citations.
 - AC-4.4 Each agent has documented contract, permitted tools, schemas, timeout and failure behaviour.
-- AC-4.5 A live Gemini smoke test (opt-in) completes and records tokens and cost.
+- AC-4.5 A live Gemini smoke test (opt-in) completes and records tokens and cost. *(Written: `tests/test_gemini_live.py`; not run until a key and model are configured, requirements Q8. Cost is recorded only when prices are configured.)*
 
 ## Milestone 5: Validation and repair
 - AC-5.1 T1: missing IDs, nonexistent IDs, and IDs from another report are all rejected.

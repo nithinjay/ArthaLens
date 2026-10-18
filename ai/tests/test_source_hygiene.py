@@ -15,6 +15,7 @@ GUARDED = [
     REPO / "ai" / "arthalens_ai" / "domain",
     REPO / "ai" / "arthalens_ai" / "ingestion",
     REPO / "ai" / "arthalens_ai" / "evidence",
+    REPO / "ai" / "arthalens_ai" / "research",
     REPO / "packages" / "policy" / "src",
     REPO / "packages" / "policy" / "test",
 ]

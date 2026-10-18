@@ -103,5 +103,6 @@ The calculator must enforce issue-specific rules. These are the *generally under
 | Q3 | Is GMP wanted at all? | Feature exists, disabled by default |
 | Q4 | Will this ever be offered publicly (needs SEBI/DPDP legal review)? | Personal/learning use; legal review is a release gate |
 | Q5 | Hosting target for M11 (GCP is natural with Gemini, but AWS/Azure are fine) | GCP |
+| Q8 | Which Gemini model to use, and its prices for cost estimates? Needs your key (ADR-0017) | Fake model until you set `MODEL_PROVIDER=gemini` + `GEMINI_MODEL`; cost NULL until prices are set |
 | Q7 | Enable live fetching of individual public SEBI documents (`PROVIDER_SEBI_FETCH_ENABLED`)? See ADR-0015 | Off; manual import only |
 | Q6 | Repo ownership: `/Library/WebServer/Documents/ArthaLens` is root-owned, so git reports "dubious ownership" | **Resolved:** ownership fixed; repo pushed to GitHub |

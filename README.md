@@ -3,7 +3,7 @@
 Evidence-grounded IPO research and stock intelligence for Indian markets (NSE/BSE).
 **Educational tool, not investment advice.** It never submits IPO applications or trades.
 
-> Status: **Milestone 3 (evidence ledger).** IPO data with per-field, per-page provenance; an immutable, versioned, tenant-isolated evidence ledger; sandboxed PDF parsing with OCR; Jio exclusion at every layer. No research reports or UI yet. See [docs/CHECKLIST.md](docs/CHECKLIST.md).
+> Status: **Milestone 4 (research orchestration).** Research reports end to end: ADK-orchestrated sections, live progress over SSE, idempotent creation, crash-safe resume. Drafted claims stay unverified until the Milestone 5 validator; no UI yet. See [docs/CHECKLIST.md](docs/CHECKLIST.md).
 
 ## Layout
 

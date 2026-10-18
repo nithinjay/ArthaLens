@@ -8,6 +8,8 @@ import type { IpoIdentity, IpoRepository } from './repository.js';
 export interface IpoRouteDeps {
   repo: IpoRepository;
   policy: ExclusionPolicy;
+  /** More routes for /api/v1/ipos/:ipoId/..., registered behind the same exclusion guard. */
+  scoped?: ((scope: FastifyInstance) => Promise<void>)[];
 }
 
 const UUID_PATTERN = '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$';
@@ -200,5 +202,7 @@ export async function ipoRoutes(app: FastifyInstance, deps: IpoRouteDeps): Promi
         return detail;
       },
     );
+
+    for (const register of deps.scoped ?? []) await register(scope);
   });
 }

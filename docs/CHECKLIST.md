@@ -67,7 +67,7 @@ Totals: pytest 236 · Vitest 99 (backend 61, policy 33, frontend 5) · smoke 44 
 - IPO identity is the normalised company name; a company that withdraws and refiles shares one IPO record.
 - The DB backstop is a coarse `jio` substring check; the precise matcher runs in the services.
 
-## Milestone 3: Evidence ledger (awaiting your verification)
+## Milestone 3: Evidence ledger (merged 2026-10-18, PR #3 incl. review fixes)
 
 | AC | Item | State | Evidence (run 2026-10-18) |
 |---|---|---|---|
@@ -97,15 +97,44 @@ Totals: pytest 307 in the container (0 skipped; macOS skips 21 OCR/DB/Linux-only
 - The PDF worker isn't network-isolated (container egress policy, M11).
 - No API endpoint serves evidence yet (`GET /research/{id}/evidence` arrives with reports in M4).
 
+## Milestone 4: Research orchestration (awaiting your verification)
+
+| AC | Item | State | Evidence (run 2026-10-18) |
+|---|---|---|---|
+| 4.1 | Full run with the fake model: all 10 sections, honest states, deterministic | tested | `test_full_run…`, `test_two_runs_of_the_same_ipo_are_identical` (Postgres); 9 agent unit tests; live API (smoke) |
+| 4.1 | ADK runs independent sections in parallel, then the summary | tested | Spike: 3 × 0.3 s sections in 0.43 s; `run_research` = `SequentialAgent[ParallelAgent[A..I], J]` |
+| 4.1 | Retrieval planner: relevant passages only, budgeted, deterministic, honest about missing coverage | tested | 5 planner unit tests |
+| 4.1 | Section D built by code from verified snapshot fields (no model) | tested | Unit tests; live: "The price band is ₹285 to ₹300 per share." cites d1 |
+| 4.1 | No drafted claim is ever `verified`; fabricated labels quarantined (T1) | tested | Unit + integration + smoke; DB CHECK forbids `ok` while validation is pending |
+| 4.1 | Prompt-injection line in evidence changes nothing; delimiters can't be broken | tested | Fixture with an injection line; `test_evidence_cannot_break_out_of_its_delimiters` |
+| 4.2 | SSE: ordered, gap-free ids, resume with Last-Event-ID, reload shows final state, heartbeat polling fallback | tested | 5 real-socket SSE tests; smoke through nginx (ids 1..n, resume from 3 → 4) |
+| 4.2 | API: create (202) with idempotency (200 replay, 409 conflict), report, evidence, history, delete | tested | 11 route tests; OpenAPI lists all 5 research paths |
+| 4.3 | Crash mid-run: saved sections kept, only missing ones redone, no duplicates, gap-free events | tested | 2 crash/resume tests (summary crash: exactly A–I kept, J redone) |
+| 4.3 | Leases: exactly one of 5 concurrent claimers wins; expired lease reclaimed; exhausted jobs failed | tested | 2 integration tests |
+| 4.4 | Each agent's responsibility, tools, schemas, failure behaviour, timeout documented | done | [architecture/agent-contracts.md](architecture/agent-contracts.md) |
+| 4.4 | Section deadline, job deadline, token budget enforced | tested | Unit tests (the deadline test caught a real bug: a +5 s grace made short deadlines ineffective) |
+| 4.5 | Live Gemini call records tokens (and cost when prices are set) | **unverified** | `tests/test_gemini_live.py` written; needs your key and model (requirements Q8) |
+| — | Exclusion: L2 (no report for a withdrawn IPO), L3 (POST behind the IPO guard; report routes guarded), L4 (worker re-checks) | tested | Integration + route tests + smoke (403) |
+| — | Tenant isolation: another tenant sees none of a report's rows and can't write to it; another user's report is 404 | tested | Integration + route tests |
+| — | Dev identity: refused in production; client-sent tenant/user ids ignored | tested | Config + route tests |
+
+Totals: pytest 357 in the container (356 passed, 1 skipped = live Gemini) · Vitest 115 (backend 77, policy 33, frontend 5) · smoke 70 · migration roundtrip and backfill checks pass · secret scan clean.
+
+### Known limitations (Milestone 4)
+- **No real model has been called yet.** All reports so far come from `fake-deterministic`, which quotes evidence sentences by keyword. Gemini needs your key (Q8).
+- Sections B, C, G, H and I are "Not found" by design (ADR-0017). Every report is `completed_degraded` until the Milestone 5 validator exists.
+- Identity is a single seeded dev user (`AUTH_MODE=dev`) until Milestone 8.
+- Retrieval uses only the snapshot's documents; broader retrieval through SearchPort comes with live providers.
+- `ai-worker` has no health endpoint; a stuck worker shows up as a lease that keeps expiring.
+
 ## Unverified assumptions to resolve
 - Indian IPO application rules in requirements §4 (verify against SEBI/RHP at M7).
 - BSE terms of use (treated as manual-only until reviewed).
-- Exact Google ADK APIs and current Gemini model IDs (at M4, against pinned versions).
+- Current Gemini model ids and prices (choose with `python -m arthalens_ai.research.models`; requirements Q8).
 
 ## Later milestones
 | Milestone | State |
 |---|---|
-| M4 Research orchestration | planned |
 | M5 Validation & repair | planned |
 | M6 Research UI | planned |
 | M7 Calculator | planned |
