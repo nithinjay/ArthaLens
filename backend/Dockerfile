@@ -12,11 +12,13 @@ WORKDIR /repo
 FROM base AS manifests
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.base.json ./
 COPY packages/contracts/package.json packages/contracts/
+COPY packages/policy/package.json packages/policy/
 COPY backend/package.json backend/
 
 FROM manifests AS build
 RUN pnpm install --frozen-lockfile --filter "@arthalens/backend..."
 COPY packages/contracts packages/contracts
+COPY packages/policy packages/policy
 COPY backend backend
 RUN pnpm --filter "@arthalens/backend..." build
 
@@ -30,6 +32,9 @@ COPY --from=prod-deps /repo/node_modules node_modules
 COPY --from=prod-deps /repo/backend/node_modules backend/node_modules
 COPY --from=build /repo/packages/contracts/package.json packages/contracts/
 COPY --from=build /repo/packages/contracts/dist packages/contracts/dist
+# The exclusion policy is read at startup; the service refuses to start without it.
+COPY --from=build /repo/packages/policy/package.json /repo/packages/policy/exclusions.v1.json packages/policy/
+COPY --from=build /repo/packages/policy/dist packages/policy/dist
 COPY --from=build /repo/backend/package.json backend/
 COPY --from=build /repo/backend/dist backend/dist
 USER node

@@ -3,9 +3,10 @@ import helmet from '@fastify/helmet';
 import swagger from '@fastify/swagger';
 import { randomUUID } from 'node:crypto';
 import type { IncomingMessage } from 'node:http';
-import { ServiceHealthSchema } from '@arthalens/contracts';
+import { IpoDetailSchema, IpoListSchema, ServiceHealthSchema } from '@arthalens/contracts';
 import type { Config } from './config.js';
 import { registerProblemHandlers } from './plugins/problem.js';
+import { ipoRoutes, type IpoRouteDeps } from './ipos/routes.js';
 import { healthRoutes, type HealthDeps } from './routes/health.js';
 import { VERSION } from './version.js';
 
@@ -22,6 +23,7 @@ export function requestIdFor(req: IncomingMessage): string {
 
 export interface AppDeps {
   health: HealthDeps;
+  ipos: IpoRouteDeps;
 }
 
 export async function buildApp(
@@ -63,9 +65,12 @@ export async function buildApp(
   });
 
   app.addSchema(ServiceHealthSchema);
+  app.addSchema(IpoListSchema);
+  app.addSchema(IpoDetailSchema);
   registerProblemHandlers(app);
 
   await app.register(async (scope) => healthRoutes(scope, deps.health));
+  await app.register(async (scope) => ipoRoutes(scope, deps.ipos));
 
   app.get('/api/v1/openapi.json', { schema: { hide: true } }, async () => app.swagger());
 

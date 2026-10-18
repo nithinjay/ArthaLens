@@ -23,7 +23,7 @@
 - AC-1.7 Runtime DB roles are least-privilege (no DDL, append-only audit) and RLS hides other tenants' rows (`pnpm smoke`).
 
 ## Milestone 2: IPO ingestion
-- AC-2.1 SearchPort with mock + manual-import + ≥1 permitted live adapter (behind a flag).
+- AC-2.1 SearchPort with mock + manual-import + ≥1 permitted live adapter (behind a flag). *(Live adapter: SEBI single-document fetch, tested against a mock network only; enabling it is requirements Q7.)*
 - AC-2.2 Every critical IPO field stored with source evidence ID and `checked_at`. A test fails if any field lacks provenance.
 - AC-2.3 Status derivation tests: upcoming/open/closed/withdrawn/postponed, including the stale-"upcoming" case.
 - AC-2.4 **Exclusion:** the shared vector file passes in TS and Python; an ingested Jio entity lands in `quarantined_entities` and never in `ipos`; DB trigger rejects jobs for non-allowed IPOs; API returns `ENTITY_EXCLUDED` for list, search, detail, research, calculate and evidence routes.

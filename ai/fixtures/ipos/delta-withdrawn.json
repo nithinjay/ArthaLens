@@ -1,0 +1,66 @@
+{
+  "schema": "arthalens.ipo-import.v1",
+  "synthetic": true,
+  "company_name": "Synthetic Delta Chemicals Limited",
+  "documents": [
+    {
+      "ref": "notice",
+      "file": "docs/delta-notice.txt",
+      "url": "https://fixtures.arthalens.test/delta-notice.txt",
+      "title": "[SYNTHETIC] IPO notice: Delta Chemicals",
+      "publisher": "SYNTHETIC FIXTURE (not a real exchange)",
+      "published_at": "2026-10-09",
+      "authority": "official_exchange",
+      "source_type": "exchange_notice",
+      "mime_type": "text/plain"
+    },
+    {
+      "ref": "withdrawal",
+      "file": "docs/delta-withdrawal.txt",
+      "url": "https://fixtures.arthalens.test/delta-withdrawal.txt",
+      "title": "[SYNTHETIC] Withdrawal notice: Delta Chemicals",
+      "publisher": "SYNTHETIC FIXTURE (not a real exchange)",
+      "published_at": "2026-10-16",
+      "authority": "official_exchange",
+      "source_type": "exchange_notice",
+      "mime_type": "text/plain"
+    }
+  ],
+  "fields": {
+    "open_date": [
+      {
+        "value": "15 October 2026",
+        "source": "notice",
+        "quote": "Bid opens on: 15 October 2026"
+      }
+    ],
+    "close_date": [
+      {
+        "value": "17 October 2026",
+        "source": "notice",
+        "quote": "Bid closes on: 17 October 2026"
+      }
+    ],
+    "official_status": [
+      {
+        "value": "Issue withdrawn",
+        "source": "withdrawal",
+        "quote": "Status: Issue withdrawn by the company"
+      }
+    ],
+    "exchanges": [
+      {
+        "value": "BSE",
+        "source": "notice",
+        "quote": "Listing: BSE"
+      }
+    ],
+    "issue_type": [
+      {
+        "value": "Mainboard",
+        "source": "notice",
+        "quote": "Issue type: Mainboard"
+      }
+    ]
+  }
+}

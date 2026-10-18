@@ -1,0 +1,27 @@
+{
+  "schema": "arthalens.ipo-import.v1",
+  "synthetic": true,
+  "company_name": "Jio Platforms Limited (SYNTHETIC TEST ENTITY)",
+  "documents": [
+    {
+      "ref": "notice",
+      "file": "docs/must-never-be-read.txt",
+      "url": "https://fixtures.arthalens.test/must-never-be-read.txt",
+      "title": "[SYNTHETIC] Must never be read",
+      "publisher": "SYNTHETIC FIXTURE (not a real exchange)",
+      "published_at": "2026-10-15",
+      "authority": "official_exchange",
+      "source_type": "exchange_notice",
+      "mime_type": "text/plain"
+    }
+  ],
+  "fields": {
+    "lot_size": [
+      {
+        "value": "1",
+        "source": "notice",
+        "quote": "1"
+      }
+    ]
+  }
+}

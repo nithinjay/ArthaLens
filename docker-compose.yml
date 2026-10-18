@@ -35,12 +35,16 @@ services:
         condition: service_healthy
 
   ai:
-    build: ./ai
+    build:
+      context: .
+      dockerfile: ai/Dockerfile
     environment:
       APP_ENV: development
       DATABASE_URL: postgresql://app_ai:${APP_AI_DB_PASSWORD}@postgres:5432/arthalens
       AI_SERVICE_TOKEN: ${AI_SERVICE_TOKEN:?run `pnpm env:init` to create .env}
       LOG_LEVEL: ${LOG_LEVEL:-info}
+      # Live SEBI document fetching is off unless you opt in (ADR-0015).
+      PROVIDER_SEBI_FETCH_ENABLED: ${PROVIDER_SEBI_FETCH_ENABLED:-false}
     # Published for local learning and the smoke test only. Production keeps it private.
     ports:
       - '127.0.0.1:8000:8000'

@@ -1,4 +1,9 @@
 import pg from 'pg';
+
+// DATE columns are calendar dates (IST business dates), not instants. The default parser turns
+// them into a JS Date at local midnight, which shifts the day in some time zones. Keep the
+// ISO string instead.
+pg.types.setTypeParser(pg.types.builtins.DATE, (value: string) => value);
 import type { DependencyCheck } from '@arthalens/contracts';
 
 /**

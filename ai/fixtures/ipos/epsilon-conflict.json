@@ -1,0 +1,90 @@
+{
+  "schema": "arthalens.ipo-import.v1",
+  "synthetic": true,
+  "company_name": "Synthetic Epsilon Power Limited",
+  "documents": [
+    {
+      "ref": "nse",
+      "file": "docs/epsilon-nse.txt",
+      "url": "https://fixtures.arthalens.test/epsilon-nse.txt",
+      "title": "[SYNTHETIC] NSE-style notice: Epsilon Power",
+      "publisher": "SYNTHETIC FIXTURE (not a real exchange)",
+      "published_at": "2026-10-16",
+      "authority": "official_exchange",
+      "source_type": "exchange_notice",
+      "mime_type": "text/plain"
+    },
+    {
+      "ref": "bse",
+      "file": "docs/epsilon-bse.txt",
+      "url": "https://fixtures.arthalens.test/epsilon-bse.txt",
+      "title": "[SYNTHETIC] BSE-style notice: Epsilon Power",
+      "publisher": "SYNTHETIC FIXTURE (not a real exchange)",
+      "published_at": "2026-10-16",
+      "authority": "official_exchange",
+      "source_type": "exchange_notice",
+      "mime_type": "text/plain"
+    },
+    {
+      "ref": "news",
+      "file": "docs/epsilon-news.txt",
+      "url": "https://fixtures.arthalens.test/epsilon-news.txt",
+      "title": "[SYNTHETIC] News: Epsilon Power price band",
+      "publisher": "SYNTHETIC NEWS WIRE (fictional outlet)",
+      "published_at": "2026-10-17",
+      "authority": "credible_news",
+      "source_type": "news",
+      "mime_type": "text/plain"
+    }
+  ],
+  "fields": {
+    "open_date": [
+      {
+        "value": "4 November 2026",
+        "source": "nse",
+        "quote": "Bid opens on: 4 November 2026"
+      },
+      {
+        "value": "4 November 2026",
+        "source": "bse",
+        "quote": "Bid opens on: 4 November 2026"
+      }
+    ],
+    "close_date": [
+      {
+        "value": "6 November 2026",
+        "source": "nse",
+        "quote": "Bid closes on: 6 November 2026"
+      },
+      {
+        "value": "6 November 2026",
+        "source": "bse",
+        "quote": "Bid closes on: 6 November 2026"
+      }
+    ],
+    "lot_size": [
+      {
+        "value": "40 Equity Shares",
+        "source": "nse",
+        "quote": "Lot size: 40 Equity Shares"
+      },
+      {
+        "value": "45 Equity Shares",
+        "source": "bse",
+        "quote": "Lot size: 45 Equity Shares"
+      }
+    ],
+    "price_band": [
+      {
+        "value": "\u20b9450 to \u20b9475",
+        "source": "nse",
+        "quote": "Price Band: \u20b9450 to \u20b9475"
+      },
+      {
+        "value": "\u20b9440 to \u20b9465",
+        "source": "news",
+        "quote": "price band at \u20b9440 to \u20b9465"
+      }
+    ]
+  }
+}

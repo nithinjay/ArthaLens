@@ -5,9 +5,11 @@ description = "ArthaLens AI service: ingestion, evidence ledger, research orches
 requires-python = ">=3.13,<3.14"
 dependencies = [
     "fastapi>=0.143.3",
+    "httpx2>=2.13.1",
     "psycopg[binary]>=3.3.6",
     "pydantic>=2.14.1",
     "pydantic-settings>=2.16.0",
+    "pypdf>=6.21.1",
     "uvicorn[standard]>=0.54.0",
 ]
 
@@ -27,7 +29,7 @@ select = ["E", "F", "W", "I", "B", "UP", "S", "ASYNC", "RUF"]
 ignore = []
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**" = ["S101", "S105", "S106"]
+"tests/**" = ["S101", "S104", "S105", "S106"]
 
 [tool.mypy]
 python_version = "3.13"
@@ -43,7 +45,6 @@ markers = [
 
 [dependency-groups]
 dev = [
-    "httpx2>=2.13.1",
     "mypy>=2.4.0",
     "pytest>=9.1.1",
     "ruff>=0.17.1",

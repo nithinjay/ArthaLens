@@ -1,0 +1,348 @@
+{
+  "$defs": {
+    "FieldObservation": {
+      "additionalProperties": false,
+      "description": "One source's claim about one field, including ones that lost or disagreed.",
+      "properties": {
+        "field": {
+          "enum": [
+            "open_date",
+            "close_date",
+            "listing_date",
+            "listing_date_basis",
+            "price_band_low",
+            "price_band_high",
+            "lot_size",
+            "issue_size",
+            "fresh_issue_size",
+            "ofs_size",
+            "exchanges",
+            "issue_type",
+            "official_status"
+          ],
+          "title": "Field",
+          "type": "string"
+        },
+        "observed_at": {
+          "format": "date-time",
+          "title": "Observed At",
+          "type": "string"
+        },
+        "parse_error": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Parse Error"
+        },
+        "quote": {
+          "title": "Quote",
+          "type": "string"
+        },
+        "quote_verified": {
+          "title": "Quote Verified",
+          "type": "boolean"
+        },
+        "raw_value": {
+          "title": "Raw Value",
+          "type": "string"
+        },
+        "source": {
+          "$ref": "#/$defs/SourceRef"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Value"
+        }
+      },
+      "required": [
+        "field",
+        "value",
+        "raw_value",
+        "quote",
+        "quote_verified",
+        "parse_error",
+        "observed_at",
+        "source"
+      ],
+      "title": "FieldObservation",
+      "type": "object"
+    },
+    "IpoField": {
+      "additionalProperties": false,
+      "properties": {
+        "checked_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Checked At"
+        },
+        "note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Note"
+        },
+        "quote": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Quote"
+        },
+        "source": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SourceRef"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "status": {
+          "enum": [
+            "verified",
+            "unverified",
+            "conflict",
+            "unavailable"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Value"
+        }
+      },
+      "required": [
+        "status",
+        "value",
+        "checked_at",
+        "source",
+        "quote",
+        "note"
+      ],
+      "title": "IpoField",
+      "type": "object"
+    },
+    "SourceRef": {
+      "additionalProperties": false,
+      "description": "Citation for a value. Links to the original; the API never returns stored text.",
+      "properties": {
+        "authority": {
+          "enum": [
+            "official_exchange",
+            "official_regulator",
+            "issuer_filing",
+            "official_registrar",
+            "licensed_market_data",
+            "credible_news",
+            "unofficial"
+          ],
+          "title": "Authority",
+          "type": "string"
+        },
+        "evidence_id": {
+          "format": "uuid",
+          "title": "Evidence Id",
+          "type": "string"
+        },
+        "is_synthetic": {
+          "title": "Is Synthetic",
+          "type": "boolean"
+        },
+        "published_at": {
+          "anyOf": [
+            {
+              "format": "date",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Published At"
+        },
+        "publisher": {
+          "title": "Publisher",
+          "type": "string"
+        },
+        "retrieval_method": {
+          "enum": [
+            "mock_fixture",
+            "manual_import",
+            "live_fetch"
+          ],
+          "title": "Retrieval Method",
+          "type": "string"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        },
+        "url": {
+          "title": "Url",
+          "type": "string"
+        }
+      },
+      "required": [
+        "evidence_id",
+        "url",
+        "title",
+        "publisher",
+        "published_at",
+        "authority",
+        "retrieval_method",
+        "is_synthetic"
+      ],
+      "title": "SourceRef",
+      "type": "object"
+    }
+  },
+  "$id": "https://arthalens.local/schemas/ipo-detail.v1.json",
+  "additionalProperties": false,
+  "properties": {
+    "company_name": {
+      "title": "Company Name",
+      "type": "string"
+    },
+    "fields": {
+      "additionalProperties": {
+        "$ref": "#/$defs/IpoField"
+      },
+      "propertyNames": {
+        "enum": [
+          "open_date",
+          "close_date",
+          "listing_date",
+          "listing_date_basis",
+          "price_band_low",
+          "price_band_high",
+          "lot_size",
+          "issue_size",
+          "fresh_issue_size",
+          "ofs_size",
+          "exchanges",
+          "issue_type",
+          "official_status"
+        ]
+      },
+      "title": "Fields",
+      "type": "object"
+    },
+    "id": {
+      "format": "uuid",
+      "title": "Id",
+      "type": "string"
+    },
+    "is_synthetic": {
+      "title": "Is Synthetic",
+      "type": "boolean"
+    },
+    "observations": {
+      "items": {
+        "$ref": "#/$defs/FieldObservation"
+      },
+      "title": "Observations",
+      "type": "array"
+    },
+    "slug": {
+      "title": "Slug",
+      "type": "string"
+    },
+    "snapshot_created_at": {
+      "format": "date-time",
+      "title": "Snapshot Created At",
+      "type": "string"
+    },
+    "snapshot_version": {
+      "title": "Snapshot Version",
+      "type": "integer"
+    },
+    "status": {
+      "enum": [
+        "upcoming",
+        "open",
+        "closed",
+        "allotment",
+        "listed",
+        "withdrawn",
+        "postponed",
+        "unverified"
+      ],
+      "title": "Status",
+      "type": "string"
+    },
+    "status_as_of": {
+      "format": "date",
+      "title": "Status As Of",
+      "type": "string"
+    }
+  },
+  "required": [
+    "id",
+    "slug",
+    "company_name",
+    "status",
+    "status_as_of",
+    "snapshot_version",
+    "snapshot_created_at",
+    "is_synthetic",
+    "fields",
+    "observations"
+  ],
+  "title": "IpoDetail",
+  "type": "object"
+}

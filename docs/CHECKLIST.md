@@ -2,7 +2,7 @@
 
 Legend: **done** = written/implemented · **tested** = verified by a test or check that was actually run · **planned** = not started · **unverified** = assumption not yet confirmed
 
-_Last updated: 2026-10-17_
+_Last updated: 2026-10-18_
 
 ## Milestone 0: Requirements and architecture (approved 2026-10-17)
 
@@ -14,7 +14,7 @@ _Last updated: 2026-10-17_
 | Open questions Q1, Q2, Q6 | resolved | [requirements.md §6](requirements.md) |
 | Mermaid diagrams render | unverified | Not rendered in a session; check on GitHub |
 
-## Milestone 1: Project foundation (awaiting your verification)
+## Milestone 1: Project foundation (merged 2026-10-18, PR #1)
 
 | AC | Item | State | Evidence (run 2026-10-17) |
 |---|---|---|---|
@@ -36,17 +36,45 @@ _Last updated: 2026-10-17_
 - ai-worker container, object storage → M4/M3 ([ADR-0014](decisions/0014-milestone-1-implementation-refinements.md))
 - Authentication, sessions, rate limiting, CSRF → M8 (`users` table has no RLS yet; sign-in lookups need the M8 auth design)
 - CI pipeline (GitHub Actions) → M11, or earlier if you want it
-- Exclusion policy (`packages/policy`) → M2
+
+## Milestone 2: IPO data ingestion (awaiting your verification)
+
+| AC | Item | State | Evidence (run 2026-10-18) |
+|---|---|---|---|
+| 2.1 | SearchPort + `fixtures` (synthetic) + `manual` import providers | tested | `ai/tests/test_pipeline.py` (19); live ingestion in Docker against Postgres |
+| 2.1 | Live adapter: guarded SEBI single-document fetch, off by default | tested (mock network only) | `ai/tests/test_fetch.py` (36). **Never run against sebi.gov.in**; enabling is requirements Q7 |
+| 2.1 | Terms review: NSE forbids automated collection, SEBI permits linking, BSE unconfirmed | done | [ADR-0015](decisions/0015-source-access-and-request-validation.md) |
+| 2.2 | Every critical field stored with source document, verbatim quote and check time | tested | DB CHECK `verified_requires_provenance` (rejects bypass attempt); smoke "every verified field has source, quote and check time" |
+| 2.2 | "Verified" requires the quote to appear in the stored document | tested | `test_resolve_and_status.py`, `test_pipeline.py::test_every_verified_field_has_grounded_provenance` |
+| 2.2 | Field resolution: authority, then recency, conflicts, discrepancies noted | tested | 8 unit tests + fixtures (addendum supersedes; equal-authority conflict shows no value) |
+| 2.3 | Status derivation incl. stale "upcoming" → `unverified` | tested | 11 status tests; 6 fixture IPOs land on 6 different statuses (live API) |
+| 2.4 | Exclusion matcher: same 26 vectors pass in TS and Python | tested | `packages/policy` Vitest 33/33; pytest `-m policy` 37/37 |
+| 2.4 | L5: excluded entities quarantined before any document is read | tested | Fixture points at a non-existent file; run still succeeds. `quarantined_entities` holds name + URL only |
+| 2.4 | L2: DB backstop rejects Jio names (incl. full-width) and snapshots of withdrawn IPOs | tested | Direct SQL probes as `app_ai` → CHECK and trigger violations |
+| 2.4 | L3: API search notice, row re-check, per-IPO route guard, audit | tested | Backend Vitest (25 IPO tests); smoke (4 searches, 403 + audit row) |
+| 2.4 | L6: policy reconcile marks stored IPOs `withdrawn_by_policy` | tested (unit) | In-memory repo test path; Postgres method exercised on every run but has never matched a row |
+| 2.5 | SSRF: private/metadata IPs, rebinding, redirects, robots, size, MIME | tested | `test_fetch.py`; peer-address check unit-tested (needs a real socket to run end-to-end) |
+| — | INR/date/price-band/lot normalisation (lakh/crore vs million/billion) | tested | `test_normalize.py` (73) |
+| — | `GET /api/v1/ipos` (filters, search, cursor pagination) and `GET /api/v1/ipos/{id}` | tested | Backend Vitest + smoke (live, 44/44) |
+| — | API role can cite documents but can't read stored text or the quarantine | tested | Column-level grant; SQL probes → permission denied |
+| — | Source files in policy/domain/ingestion are ASCII-only (no hidden look-alikes) | tested | `test_source_hygiene.py` |
+
+Totals: pytest 236 · Vitest 99 (backend 61, policy 33, frontend 5) · smoke 44 · migration roundtrip pass · secret scan clean.
+
+### Known limitations (Milestone 2)
+- No real IPO data is loaded. Only synthetic fixtures. Real data needs manual import (NSE/BSE) or enabling SEBI fetch (Q7).
+- Scanned PDFs yield no text, so their fields stay "Not verified" until OCR (M3/M4). PDF parsing isn't sandboxed yet (threat model T-21, M3).
+- IPO identity is the normalised company name; a company that withdraws and refiles shares one IPO record.
+- The DB backstop is a coarse `jio` substring check; the precise matcher runs in the services.
 
 ## Unverified assumptions to resolve
 - Indian IPO application rules in requirements §4 (verify against SEBI/RHP at M7).
-- Terms of use for NSE/BSE/SEBI programmatic access (before M2 live adapters).
+- BSE terms of use (treated as manual-only until reviewed).
 - Exact Google ADK APIs and current Gemini model IDs (at M4, against pinned versions).
 
 ## Later milestones
 | Milestone | State |
 |---|---|
-| M2 IPO ingestion + exclusion | planned |
 | M3 Evidence ledger | planned |
 | M4 Research orchestration | planned |
 | M5 Validation & repair | planned |

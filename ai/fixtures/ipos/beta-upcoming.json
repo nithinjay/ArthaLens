@@ -1,0 +1,96 @@
+{
+  "schema": "arthalens.ipo-import.v1",
+  "synthetic": true,
+  "company_name": "Synthetic Beta Logistics Limited",
+  "documents": [
+    {
+      "ref": "notice",
+      "file": "docs/beta-notice.txt",
+      "url": "https://fixtures.arthalens.test/beta-notice.txt",
+      "title": "[SYNTHETIC] IPO notice: Beta Logistics",
+      "publisher": "SYNTHETIC FIXTURE (not a real exchange)",
+      "published_at": "2026-10-15",
+      "authority": "official_exchange",
+      "source_type": "exchange_notice",
+      "mime_type": "text/plain"
+    },
+    {
+      "ref": "addendum",
+      "file": "docs/beta-addendum.txt",
+      "url": "https://fixtures.arthalens.test/beta-addendum.txt",
+      "title": "[SYNTHETIC] Addendum: Beta Logistics closing date",
+      "publisher": "SYNTHETIC FIXTURE (not a real exchange)",
+      "published_at": "2026-10-17",
+      "authority": "official_exchange",
+      "source_type": "exchange_notice",
+      "mime_type": "text/plain"
+    },
+    {
+      "ref": "rhp",
+      "file": "docs/beta-rhp.txt",
+      "url": "https://fixtures.arthalens.test/beta-rhp.txt",
+      "title": "[SYNTHETIC] RHP excerpt: Beta Logistics",
+      "publisher": "SYNTHETIC FIXTURE (fictional issuer)",
+      "published_at": "2026-10-14",
+      "authority": "issuer_filing",
+      "source_type": "offer_document",
+      "mime_type": "text/plain"
+    }
+  ],
+  "fields": {
+    "open_date": [
+      {
+        "value": "27 October 2026",
+        "source": "notice",
+        "quote": "Bid opens on: 27 October 2026"
+      }
+    ],
+    "close_date": [
+      {
+        "value": "29 October 2026",
+        "source": "notice",
+        "quote": "Bid closes on: 29 October 2026"
+      },
+      {
+        "value": "30 October 2026",
+        "source": "addendum",
+        "quote": "Bid closes on: 30 October 2026"
+      }
+    ],
+    "price_band": [
+      {
+        "value": "\u20b91,045 to \u20b91,100",
+        "source": "notice",
+        "quote": "Price Band: \u20b91,045 to \u20b91,100 per equity share of face value \u20b910 each"
+      }
+    ],
+    "lot_size": [
+      {
+        "value": "13 Equity Shares",
+        "source": "notice",
+        "quote": "Lot size: 13 Equity Shares"
+      }
+    ],
+    "fresh_issue_size": [
+      {
+        "value": "\u20b92,500 crore",
+        "source": "rhp",
+        "quote": "Fresh Issue of \u20b92,500 crore"
+      }
+    ],
+    "exchanges": [
+      {
+        "value": "NSE and BSE",
+        "source": "notice",
+        "quote": "Listing: NSE and BSE"
+      }
+    ],
+    "issue_type": [
+      {
+        "value": "Mainboard",
+        "source": "notice",
+        "quote": "Issue type: Mainboard"
+      }
+    ]
+  }
+}

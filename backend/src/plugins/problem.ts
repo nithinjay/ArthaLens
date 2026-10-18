@@ -9,6 +9,8 @@ export interface Problem {
   detail?: string;
   instance: string;
   request_id: string;
+  /** Machine-readable reason for clients, e.g. ENTITY_EXCLUDED. */
+  code?: string;
 }
 
 export function sendProblem(
@@ -16,6 +18,7 @@ export function sendProblem(
   reply: FastifyReply,
   status: number,
   detail?: string,
+  code?: string,
 ): FastifyReply {
   const problem: Problem = {
     type: 'about:blank',
@@ -24,6 +27,7 @@ export function sendProblem(
     ...(detail === undefined ? {} : { detail }),
     instance: request.url,
     request_id: request.id,
+    ...(code === undefined ? {} : { code }),
   };
   return reply.code(status).type('application/problem+json').send(problem);
 }

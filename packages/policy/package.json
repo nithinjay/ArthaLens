@@ -1,0 +1,27 @@
+{
+  "name": "@arthalens/policy",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Product policy rules (Jio IPO exclusion). Rules and test vectors are language-neutral JSON shared with ai/.",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "*.json"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@types/node": "22.20.5",
+    "typescript": "6.0.3",
+    "vitest": "5.0.5"
+  }
+}

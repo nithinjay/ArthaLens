@@ -1,0 +1,83 @@
+{
+  "schema": "arthalens.ipo-import.v1",
+  "synthetic": true,
+  "company_name": "Synthetic Gamma Textiles Limited",
+  "documents": [
+    {
+      "ref": "notice",
+      "file": "docs/gamma-notice.txt",
+      "url": "https://fixtures.arthalens.test/gamma-notice.txt",
+      "title": "[SYNTHETIC] SME IPO notice: Gamma Textiles",
+      "publisher": "SYNTHETIC FIXTURE (not a real exchange)",
+      "published_at": "2026-09-30",
+      "authority": "official_exchange",
+      "source_type": "exchange_notice",
+      "mime_type": "text/plain"
+    }
+  ],
+  "fields": {
+    "open_date": [
+      {
+        "value": "6 October 2026",
+        "source": "notice",
+        "quote": "Bid opens on: 6 October 2026"
+      }
+    ],
+    "close_date": [
+      {
+        "value": "8 October 2026",
+        "source": "notice",
+        "quote": "Bid closes on: 8 October 2026"
+      }
+    ],
+    "price_band": [
+      {
+        "value": "\u20b9114 to \u20b9120",
+        "source": "notice",
+        "quote": "Price Band: \u20b9114 to \u20b9120 per equity share"
+      }
+    ],
+    "lot_size": [
+      {
+        "value": "1,200 Equity Shares",
+        "source": "notice",
+        "quote": "Lot size: 1,200 Equity Shares"
+      }
+    ],
+    "issue_size": [
+      {
+        "value": "\u20b945.6 crore",
+        "source": "notice",
+        "quote": "Issue size: \u20b945.6 crore"
+      }
+    ],
+    "listing_date": [
+      {
+        "value": "13 October 2026",
+        "source": "notice",
+        "quote": "Listing date: 13 October 2026 (Confirmed)"
+      }
+    ],
+    "listing_date_basis": [
+      {
+        "value": "Confirmed",
+        "source": "notice",
+        "quote": "13 October 2026 (Confirmed)"
+      }
+    ],
+    "exchanges": [
+      {
+        "value": "NSE Emerge",
+        "source": "notice",
+        "quote": "Platform: NSE Emerge"
+      }
+    ],
+    "issue_type": [
+      {
+        "value": "SME IPO",
+        "source": "notice",
+        "quote": "NSE Emerge (SME IPO)"
+      }
+    ]
+  }
+}

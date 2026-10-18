@@ -1,0 +1,34 @@
+{
+  "schema": "arthalens.ipo-import.v1",
+  "synthetic": true,
+  "company_name": "Synthetic Zeta Retail Limited",
+  "documents": [
+    {
+      "ref": "news",
+      "file": "docs/zeta-news.txt",
+      "url": "https://fixtures.arthalens.test/zeta-news.txt",
+      "title": "[SYNTHETIC] News: Zeta Retail IPO",
+      "publisher": "SYNTHETIC NEWS WIRE (fictional outlet)",
+      "published_at": "2026-05-02",
+      "authority": "credible_news",
+      "source_type": "news",
+      "mime_type": "text/plain"
+    }
+  ],
+  "fields": {
+    "official_status": [
+      {
+        "value": "upcoming",
+        "source": "news",
+        "quote": "is an upcoming IPO"
+      }
+    ],
+    "open_date": [
+      {
+        "value": "1 June 2026",
+        "source": "news",
+        "quote": "Bid opens on: 1 June 2026"
+      }
+    ]
+  }
+}
