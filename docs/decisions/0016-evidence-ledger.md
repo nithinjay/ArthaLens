@@ -17,8 +17,10 @@ Every factual claim must cite evidence that can't be fabricated or silently chan
 | `evidence_retrievals` | Every retrieval, including unchanged re-fetches, with non-sensitive request metadata | append-only log |
 | `evidence_sets` / `_items` | Stable per-report labels `d1`, `d2`, … | (set, position) |
 
-- **De-duplication:** same `source_key` (canonical URL) + same bytes → same document; only a retrieval is logged. Identical bytes from two sources share one content and one set of passages.
-- **Versions:** same source, new bytes → `version + 1` with `supersedes_id`. Reverting to old bytes reuses the old version.
+- **De-duplication:** fetching a source again with the same bytes as its *latest* version returns that document; only a retrieval is logged. Identical bytes from two sources share one content and one set of passages.
+- **Versions are a timeline:** new bytes → `version + 1` with `supersedes_id`, even when they match an older version (A → B → A is v1, v2, v3). The newest version is always the current content. *(Changed after PR #3 review: originally a revert reused v1, which left an outdated v2 looking current.)*
+- **Key namespaces:** public documents use the canonical URL. Tenant documents use `tenant:<id>:<url>` or `upload:<id>:<sha>`, enforced by a CHECK, so a tenant's copy of a URL never collides with, or reveals itself through, the public version chain.
+- **Canonical keys** are defined twice, in Python (`canonical.py`) and SQL (`canonical_source_key`, used by the backfill), with shared test vectors proving they agree.
 - **Labels:** assigned under a row lock on the set, so they are gap-free and idempotent, and never move to another document.
 
 ### Immutability
@@ -42,11 +44,15 @@ Triggers refuse UPDATE, DELETE and TRUNCATE on all evidence tables **for every r
 `EvidenceLedger` and `EvidenceSets` (write) are constructed only by ingestion. Research agents (M4) get `EvidenceReader`, which has no write methods. Agents can't create source ids or rewrite source content.
 
 ### Extraction
-- Plain text and HTML in-process. **PDFs in a sandboxed subprocess**: `python -I`, minimal environment (no secrets), CPU, memory, file-size and open-file limits, a wall-clock kill and an output cap.
+- Plain text and HTML in-process. **PDFs in a sandboxed subprocess**: `python -I`, minimal environment (no secrets), CPU, memory, file-size and open-file limits, a wall-clock kill, and an output cap enforced *while reading* (the worker is killed the moment it is exceeded, and only the last 64 KB of stderr is kept).
 - Pages keep their numbers. Pages with almost no text layer are OCR'd (Tesseract 5.3, 200 dpi) and store a mean word confidence.
 
 ### Raw bytes (source snapshots)
 Kept write-once by hash in a `LocalBlobStore` on the `evidence` Docker volume, re-verified on every read and never served by the API. Object storage replaces it in Milestone 11.
+
+### Backfill and rollback
+- Milestone 2 documents become versions in retrieval order, keyed canonically, with their text split into ≤ 4,000-character passages and nothing dropped.
+- Rolling back **refuses** when the data can't be represented in the Milestone 2 shape (tenant-private evidence would become public; repeated content per URL), instead of deleting rows. `scripts/check-evidence-backfill.sh` tests both.
 
 ## Consequences
 - Evidence can't be corrected in place. A wrong document stays and is superseded or purged by retention, which keeps old reports reproducible.

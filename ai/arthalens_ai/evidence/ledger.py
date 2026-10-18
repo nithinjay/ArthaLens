@@ -1,9 +1,11 @@
 """Evidence ledger: write side. Only the retrieval and ingestion layer holds one (brief section 9).
 
 ``record`` is idempotent and append-only:
-- same source + same bytes      -> the existing document; a retrieval is logged
-- same source + different bytes -> a new version that supersedes the previous one
+- same bytes as the source's latest version -> that document; a retrieval is logged
+- different bytes                           -> a new version superseding the latest, even
+  if the bytes match an older version (A -> B -> A is v1, v2, v3: versions are a timeline)
 - bytes are stored once by hash; their text is stored once as page-anchored passages
+- tenant records live in their tenant's key namespace and never touch the public chain
 Nothing is ever updated or deleted (the database refuses; see the immutability triggers).
 """
 
@@ -18,7 +20,7 @@ from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
 
 from arthalens_ai.evidence.blobstore import BlobStore
-from arthalens_ai.evidence.canonical import source_key, upload_source_key
+from arthalens_ai.evidence.canonical import source_key, tenant_source_key, upload_source_key
 from arthalens_ai.evidence.extract import EXTRACTOR_VERSION, Extraction
 from arthalens_ai.evidence.passages import to_passages
 
@@ -56,6 +58,14 @@ class EvidenceRef:
     content_created: bool  # these bytes had never been seen before
 
 
+def _key_for(source: SourceRecord, sha: str) -> str:
+    if source.tenant_id is None:
+        return source_key(source.url)
+    if source.retrieval_method == "upload":
+        return upload_source_key(source.tenant_id, sha)
+    return tenant_source_key(source.tenant_id, source.url)
+
+
 def _one(row: dict[str, Any] | None, what: str) -> dict[str, Any]:
     if row is None:
         raise RuntimeError(f"expected a row from {what}")
@@ -76,11 +86,7 @@ class EvidenceLedger:
         ingestion_run_id: UUID | None = None,
     ) -> EvidenceRef:
         sha = hashlib.sha256(content).hexdigest()
-        key = (
-            upload_source_key(source.tenant_id, sha)
-            if (source.retrieval_method == "upload" and source.tenant_id)
-            else source_key(source.url)
-        )
+        key = _key_for(source, sha)
         # Bytes first: write-once and content-addressed, so a later DB failure leaves only a
         # harmless orphan, never a document pointing at missing bytes.
         storage_key = self._blobs.put(sha, content) if self._blobs else None
@@ -97,25 +103,17 @@ class EvidenceLedger:
             # Serialise version numbering per source.
             await cur.execute("SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))", (key,))
             await cur.execute(
-                "SELECT id, version FROM evidence_documents"
-                " WHERE source_key = %s AND content_sha256 = %s",
-                (key, sha),
-            )
-            existing = await cur.fetchone()
-            if existing:
-                await self._log_retrieval(
-                    cur, existing["id"], source, retrieved_at, ingestion_run_id
-                )
-                return EvidenceRef(
-                    existing["id"], existing["version"], sha, key, False, content_created
-                )
-
-            await cur.execute(
-                "SELECT id, version FROM evidence_documents WHERE source_key = %s"
+                "SELECT id, version, content_sha256 FROM evidence_documents WHERE source_key = %s"
                 " ORDER BY version DESC LIMIT 1",
                 (key,),
             )
             latest = await cur.fetchone()
+            if latest and latest["content_sha256"] == sha:
+                await self._log_retrieval(cur, latest["id"], source, retrieved_at, ingestion_run_id)
+                return EvidenceRef(
+                    latest["id"], latest["version"], sha, key, False, content_created
+                )
+
             version = latest["version"] + 1 if latest else 1
             await cur.execute(
                 """

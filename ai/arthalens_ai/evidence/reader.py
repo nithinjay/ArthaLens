@@ -6,6 +6,7 @@ context, so row-level security decides what is visible; a document another tenan
 simply doesn't exist from here.
 """
 
+import itertools
 from collections.abc import AsyncIterator, Sequence
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
@@ -121,6 +122,11 @@ class EvidenceReader:
     async def passages(
         self, document_id: UUID, pages: Sequence[int] | None = None
     ) -> list[PassageView]:
+        """Passages of a document, optionally only some pages. ``pages=[]`` means no pages
+        (an empty selection returns nothing, never the whole document)."""
+        if pages is not None and len(pages) == 0:
+            return []
+        page_filter = list(pages) if pages is not None else None
         async with self._cursor() as cur:
             await cur.execute(
                 """
@@ -130,7 +136,7 @@ class EvidenceReader:
                  WHERE d.id = %s AND (%s::int[] IS NULL OR p.page_number = ANY(%s::int[]))
                  ORDER BY coalesce(p.page_number, 0), p.passage_index
                 """,
-                (document_id, list(pages) if pages else None, list(pages) if pages else None),
+                (document_id, page_filter, page_filter),
             )
             rows = await cur.fetchall()
         return [
@@ -147,13 +153,37 @@ class EvidenceReader:
         ]
 
     async def locate(self, document_id: UUID, quote: str) -> Location | None:
-        """Where a verbatim quote appears in the document, if it does."""
+        """Where a verbatim quote appears, if it does: the page and the passage it starts in.
+
+        Matches across passage boundaries within a page, and across a page break (cited to
+        the page the quote starts on), using the same normalisation as quote verification.
+        """
         needle = squash(quote)
         if not needle:
             return None
+        by_page: dict[int | None, list[PassageView]] = {}
         for p in await self.passages(document_id):
-            if needle in squash(p.text):
-                return Location(p.page_number, p.passage_index)
+            by_page.setdefault(p.page_number, []).append(p)
+
+        def starts(page: int | None, offset: int) -> Location:
+            seen = 0
+            for p in by_page[page]:
+                seen += len(squash(p.text)) + 1
+                if offset < seen:
+                    return Location(page, p.passage_index)
+            return Location(page, by_page[page][-1].passage_index)
+
+        joined = {page: " ".join(squash(p.text) for p in ps) for page, ps in by_page.items()}
+        for page, text in joined.items():
+            offset = text.find(needle)
+            if offset != -1:
+                return starts(page, offset)
+        # A quote running across a page break is cited to the page it starts on.
+        numbered = sorted((n, t) for n, t in joined.items() if n is not None)
+        for (page, text), (_, following) in itertools.pairwise(numbered):
+            offset = f"{text} {following}".find(needle)
+            if offset != -1 and offset < len(text):
+                return starts(page, offset)
         return None
 
     async def set_labels(self, set_id: UUID) -> dict[str, UUID]:

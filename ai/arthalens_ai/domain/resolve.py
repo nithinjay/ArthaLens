@@ -14,10 +14,12 @@ Rules, in order:
    claimed, else ``unavailable``.
 """
 
+import itertools
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from dataclasses import field as dc_field
 from datetime import date
+from functools import cached_property
 from typing import Any
 
 from arthalens_ai.contracts.ipo import FIELD_NAMES, Authority, FieldName, FieldStatus
@@ -81,6 +83,16 @@ class EvidenceDoc:
     # (page_number, text) per page; page_number is None for formats without pages.
     pages: tuple[tuple[int | None, str], ...] = ()
 
+    # Normalised once per document, not once per observation (a 1,500-page RHP may carry
+    # dozens of observations).
+    @cached_property
+    def squashed_text(self) -> str:
+        return squash(self.text)
+
+    @cached_property
+    def squashed_pages(self) -> tuple[tuple[int, str], ...]:
+        return tuple((n, squash(t)) for n, t in self.pages if n is not None)
+
 
 @dataclass(frozen=True)
 class RawObservation:
@@ -127,8 +139,12 @@ def quote_supports(quote: str, raw_value: str, doc_text: str) -> bool:
 
     Comparison ignores case, Unicode width and whitespace runs, nothing else.
     """
-    q = squash(quote)
-    return bool(q) and q in squash(doc_text) and squash(raw_value) in q
+    return _supports(squash(quote), raw_value, squash(doc_text))
+
+
+def _supports(squashed_quote: str, raw_value: str, squashed_doc: str) -> bool:
+    q = squashed_quote
+    return bool(q) and q in squashed_doc and squash(raw_value) in q
 
 
 def expand(raw: RawObservation) -> list[Observation]:
@@ -136,8 +152,9 @@ def expand(raw: RawObservation) -> list[Observation]:
     if raw.raw_field not in RAW_FIELDS:
         raise ValueError(f"unknown raw field {raw.raw_field!r}")
     targets, parser = RAW_FIELDS[raw.raw_field]
-    verified = quote_supports(raw.quote, raw.raw_value, raw.doc.text)
-    page = _page_of(raw.quote, raw.doc.pages) if verified else None
+    squashed_quote = squash(raw.quote)
+    verified = _supports(squashed_quote, raw.raw_value, raw.doc.squashed_text)
+    page = page_of(squashed_quote, raw.doc.squashed_pages) if verified else None
     error: str | None = None
     try:
         values: tuple[Any, ...] = parser(raw.raw_value)
@@ -158,10 +175,18 @@ def expand(raw: RawObservation) -> list[Observation]:
     ]
 
 
-def _page_of(quote: str, pages: tuple[tuple[int | None, str], ...]) -> int | None:
-    needle = squash(quote)
-    for number, text in pages:
-        if number is not None and needle in squash(text):
+def page_of(squashed_quote: str, squashed_pages: Sequence[tuple[int, str]]) -> int | None:
+    """Page a quote is on. A quote running across a page break is cited to the page it starts
+    on. Inputs are already squashed."""
+    if not squashed_quote:
+        return None
+    for number, text in squashed_pages:
+        if squashed_quote in text:
+            return number
+    for (number, text), (_, following) in itertools.pairwise(squashed_pages):
+        joined = f"{text} {following}"
+        start = joined.find(squashed_quote)
+        if start != -1 and start < len(text):
             return number
     return None
 

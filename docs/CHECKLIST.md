@@ -75,7 +75,7 @@ Totals: pytest 236 · Vitest 99 (backend 61, policy 33, frontend 5) · smoke 44 
 | 3.1 | Only exceptions: retention DELETE in an opted-in transaction; storage key NULL → value once | tested | `test_retention_purge_is_the_only_way_to_delete`, `test_retained_bytes_can_be_attached_once…` |
 | 3.1 | Label assignments and set counters can't be rewritten | tested | `test_label_assignments_cannot_be_rewritten` |
 | 3.2 | Same source + same bytes → one document, each retrieval logged | tested | Integration test; smoke (re-ingest → +12 retrievals, 0 duplicates) |
-| 3.2 | Changed bytes → new version with `supersedes_id`; reverting reuses the old version | tested | `test_changed_bytes_make_a_new_version_that_supersedes` |
+| 3.2 | Changed bytes → new version with `supersedes_id`; A → B → A is v1, v2, v3 | tested | `test_changed_bytes_make_a_new_version_that_supersedes` |
 | 3.2 | Identical bytes from two sources share one content and one set of passages | tested | `test_identical_bytes_from_two_sources_share_one_content` |
 | 3.2 | Stable labels d1, d2, …: idempotent, gap-free under 6 concurrent writers | tested | `test_labels_are_stable_idempotent_and_gap_free_under_concurrency`; every snapshot has a labelled set (smoke) |
 | 3.3 | Page-level passages for PDFs; quotes located to a page; API cites the page | tested | Unit + integration; live API: Beta fresh issue → page 2 (smoke) |
@@ -86,9 +86,10 @@ Totals: pytest 236 · Vitest 99 (backend 61, policy 33, frontend 5) · smoke 44 
 | T-21 | PDFs parsed in a sandboxed subprocess (timeouts, crashes, output cap, no inherited secrets, memory limit) | tested | 7 sandbox tests incl. memory limit (Linux container) |
 | — | Raw source bytes kept write-once by hash, integrity-checked on read, never served | tested | Blob store unit tests; smoke (every content retained; file count matches) |
 | — | Migration 4 backfills Milestone 2 data and reverses cleanly, with and without data | tested | Dev DB backfill (12 docs → 12 contents/passages/retrievals); roundtrip script; rollback with data |
+| — | PR #3 review: 10 findings, all real, all fixed with regression tests | tested | Backfill versions, canonical keys (Python = SQL, 13 vectors), lossless passage split, tenant key namespace, version timeline, safe rollback, streaming output cap (2 GB flood stopped at 8 MB), cross-page/passage quote location, `pages=[]`, cached normalisation. `scripts/check-evidence-backfill.sh` + 8 new tests |
 | — | Dev database recreated after amending migration 4 | done | Held only synthetic fixtures (6 IPOs, 0 non-synthetic); re-ingested |
 
-Totals: pytest 299 in the container (0 skipped; macOS skips 18 OCR/DB/Linux-only tests) · Vitest 99 · smoke 54 · migration roundtrip pass · secret scan clean.
+Totals: pytest 307 in the container (0 skipped; macOS skips 21 OCR/DB/Linux-only tests) · Vitest 99 · smoke 54 · migration roundtrip pass · backfill check pass · secret scan clean.
 
 ### Known limitations (Milestone 3)
 - Retention purging is manual SQL; the scheduled job and its policy come later.

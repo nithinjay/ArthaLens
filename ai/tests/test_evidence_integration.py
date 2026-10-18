@@ -131,8 +131,15 @@ def test_changed_bytes_make_a_new_version_that_supersedes() -> None:
         assert (v1.version, v2.version, v2.created) == (1, 2, True)
         doc = await EvidenceReader(ai, now=NOW).document(v2.document_id)
         assert doc is not None and doc.supersedes_id == v1.document_id
+        # Review finding: versions are a timeline. A -> B -> A is v1, v2, v3, so the newest
+        # version always holds the current content.
         back = await ledger.record(source(u), b"SYNTHETIC v1", pages("v1"), NOW)
-        assert back.document_id == v1.document_id  # reverting content reuses the old version
+        assert (back.version, back.created) == (3, True)
+        doc3 = await EvidenceReader(ai, now=NOW).document(back.document_id)
+        assert doc3 is not None and doc3.supersedes_id == v2.document_id
+        assert back.content_sha256 == v1.content_sha256  # bytes still stored once
+        again = await ledger.record(source(u), b"SYNTHETIC v1", pages("v1"), NOW)
+        assert (again.document_id, again.created) == (back.document_id, False)
 
     run(t)
 
@@ -177,6 +184,72 @@ def test_labels_are_stable_idempotent_and_gap_free_under_concurrency() -> None:
         assert again == labels[0]  # re-adding returns the original label
         mapping = await EvidenceReader(ai).set_labels(set_id)
         assert mapping == {lab: d for lab, d in zip(labels, docs, strict=True)}
+
+    run(t)
+
+
+CANONICAL_VECTORS = [
+    "HTTPS://WWW.SEBI.GOV.IN/filings/rhp.pdf",
+    "https://www.sebi.gov.in:443/a",
+    "http://x.test:80/a",
+    "http://x.test:8080/a",
+    "https://www.sebi.gov.in./a#page=4",
+    "https://x.test/a?b=2&a=1",
+    "https://x.test/a?utm_source=mail&id=7&fbclid=z&UTM_Medium=x",
+    "https://x.test",
+    "https://x.test?b=1",
+    "https://user:pw@x.test/p",
+    "https://x.test/a?q=a%20b&p=c+d",
+    "https://x.test/a?&&b=1&",
+    "https://x.test/caf%C3%A9?z=%C3%A9&a=1",
+]
+
+
+def test_python_and_sql_canonical_keys_agree() -> None:
+    """Review finding: the backfill (SQL) and the ledger (Python) must produce the same key,
+    or version chains break for documents ingested before Milestone 3."""
+    from arthalens_ai.evidence.canonical import source_key
+
+    async def t(ai: Conn, api: Conn, admin: Conn) -> None:
+        for raw in CANONICAL_VECTORS:
+            assert await scalar(admin, "SELECT canonical_source_key(%s)", raw) == source_key(raw), (
+                raw
+            )
+
+    run(t)
+
+
+def test_tenant_copy_of_a_public_url_never_collides_with_the_public_chain() -> None:
+    """Review finding: a tenant's fetch of public URL X and the public pipeline's fetch of X
+    used to share a key, so RLS hid one from the other and the insert hit a unique violation."""
+
+    async def t(ai: Conn, api: Conn, admin: Conn) -> None:
+        tenant = await make_tenant(admin)
+        u, body = url(), f"SYNTHETIC shared {uuid4()}".encode()
+        ledger = EvidenceLedger(ai, None)
+        private = await ledger.record(
+            source(u, tenant=tenant, method="live_fetch"), body, pages("p"), NOW
+        )
+        public = await ledger.record(source(u), body, pages("p"), NOW)
+        assert private.source_key.startswith(f"tenant:{tenant}:")
+        assert public.document_id != private.document_id
+        assert (public.version, private.version) == (1, 1)
+        assert await EvidenceReader(ai, None).document(private.document_id) is None
+        # A tenant row can't be written under a public key, even directly.
+        sha = public.content_sha256
+        async with ai.transaction():
+            await ai.execute("SELECT set_config('app.tenant_id', %s, true)", (str(tenant),))
+            await expect_error(
+                ai.execute(
+                    """INSERT INTO evidence_documents (content_sha256, canonical_url, source_key,
+                        version, title, publisher, retrieved_at, source_type, authority,
+                        retrieval_method, provider, display_rights, visibility, tenant_id)
+                       VALUES (%s, %s, %s, 2, 't', 'p', now(), 'other', 'unofficial',
+                        'live_fetch', 'test', 'excerpt', 'tenant', %s)""",
+                    (sha, u, public.source_key, tenant),
+                ),
+                "evidence_documents_key_namespace",
+            )
 
     run(t)
 
@@ -336,9 +409,36 @@ def test_passages_and_quote_location_keep_page_numbers() -> None:
         loc = await reader.locate(ref.document_id, "minimum bid lot:  50 equity SHARES")
         assert loc is not None and loc.page_number == 2
         assert await reader.locate(ref.document_id, "Lot: 60") is None
+        assert await reader.passages(ref.document_id, pages=[]) == []  # empty selection = nothing
         doc = await reader.document(ref.document_id)
         assert doc is not None and (doc.page_count, doc.extraction_method) == (2, "pdf_text_ocr")
         assert doc.freshness.status == "fresh"
+
+    run(t)
+
+
+def test_locate_finds_quotes_across_passage_and_page_boundaries() -> None:
+    async def t(ai: Conn, api: Conn, admin: Conn) -> None:
+        filler = " ".join(f"w{i}" for i in range(450))  # ~2,400 chars: page 1 splits in two
+        extraction = Extraction(
+            "pdf_text",
+            3,
+            (
+                PageText(1, filler + " Bid opens on 27 October 2026"),
+                PageText(2, "Notes. The Price Band: Rs 100"),
+                PageText(3, "to Rs 105 per share."),
+            ),
+        )
+        ref = await EvidenceLedger(ai, None).record(
+            source(url()), f"SYNTHETIC {uuid4()}".encode(), extraction, NOW
+        )
+        reader = EvidenceReader(ai, now=NOW)
+        assert len(await reader.passages(ref.document_id, pages=[1])) == 2
+        across_passages = await reader.locate(ref.document_id, "w449 Bid opens on 27 October 2026")
+        assert across_passages is not None and across_passages.page_number == 1
+        across_pages = await reader.locate(ref.document_id, "Price Band: Rs 100 to Rs 105")
+        assert across_pages is not None and across_pages.page_number == 2
+        assert await reader.locate(ref.document_id, "Rs 100 to Rs 999") is None
 
     run(t)
 

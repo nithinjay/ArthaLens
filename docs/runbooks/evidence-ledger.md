@@ -11,6 +11,9 @@ sh scripts/test-integration.sh
 sh scripts/test-integration.sh -m integration     # only the database tests
 sh scripts/test-integration.sh -m ocr             # only OCR
 
+# Migration 4 against Milestone 2-shaped data (versions, canonical keys, lossless split, safe rollback)
+sh scripts/check-evidence-backfill.sh
+
 # On macOS without tesseract/Postgres URLs, OCR and integration tests are skipped:
 cd ai && uv run pytest
 ```

@@ -36,6 +36,22 @@ def test_source_key(url: str, key: str) -> None:
     assert source_key(url) == key
 
 
+def test_query_pairs_are_kept_raw_not_reencoded() -> None:
+    # Matches the SQL canonical_source_key used by the backfill: no decode/re-encode.
+    assert source_key("https://x.test/a?q=a%20b&p=c+d") == "https://x.test/a?p=c+d&q=a%20b"
+    assert source_key("https://x.test/a?&&b=1&") == "https://x.test/a?b=1"
+
+
+def test_tenant_keys_never_collide_with_public_keys() -> None:
+    from uuid import uuid4
+
+    from arthalens_ai.evidence.canonical import tenant_source_key
+
+    url = "https://www.sebi.gov.in/rhp.pdf"
+    key = tenant_source_key(uuid4(), url)
+    assert key != source_key(url) and key.startswith("tenant:") and key.endswith(source_key(url))
+
+
 @pytest.mark.parametrize("url", ["ftp://x.test/a", "file:///etc/passwd", "https:///nohost"])
 def test_source_key_rejects(url: str) -> None:
     with pytest.raises(ValueError):
@@ -185,6 +201,31 @@ def test_sandbox_does_not_inherit_secrets(monkeypatch: pytest.MonkeyPatch) -> No
     assert b"supersecret" not in out and b"not-a-real-key" not in out
 
 
+def test_sandbox_stops_a_flood_without_buffering_it() -> None:
+    """Review finding: the cap must apply while reading, not after buffering everything."""
+    import resource
+    import time
+
+    flood = (
+        "import sys\nchunk = b'x' * (1 << 20)\nfor _ in range(2048): sys.stdout.buffer.write(chunk)"
+    )
+    started = time.monotonic()
+    with pytest.raises(SandboxError) as info:
+        asyncio.run(run_sandboxed(py(flood), b"", SandboxLimits(max_output_bytes=8 << 20)))
+    assert info.value.code == "output_too_large"
+    assert time.monotonic() - started < 10
+    rss = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+    rss_mb = rss / (1 << 20) if sys.platform == "darwin" else rss / 1024
+    assert rss_mb < 1024  # a 2 GB flood never lands in this process
+
+
+def test_sandbox_keeps_only_the_tail_of_stderr() -> None:
+    noisy = "import sys\nsys.stderr.write('x' * (8 << 20) + '\\nlast line')\nraise SystemExit(2)"
+    with pytest.raises(SandboxError) as info:
+        asyncio.run(run_sandboxed(py(noisy), b""))
+    assert info.value.code == "worker_failed" and "last line" in str(info.value)
+
+
 @pytest.mark.skipif(sys.platform != "linux", reason="RLIMIT_AS is only enforced on Linux")
 def test_sandbox_enforces_memory_limit() -> None:
     limits = SandboxLimits(memory_bytes=256 * 1024**2)
@@ -217,6 +258,21 @@ def test_observation_records_the_page_its_quote_is_on() -> None:
     raw = RawObservation("lot_size", "50 Equity Shares", "Minimum Bid Lot: 50 Equity Shares", doc)
     [obs] = expand(raw)
     assert (obs.quote_verified, obs.page) == (True, 3)
+
+
+def test_quote_across_a_page_break_is_cited_to_its_first_page() -> None:
+    from arthalens_ai.domain.resolve import page_of, squash
+
+    pages = (
+        (11, "Intro."),
+        (12, "Section 4. The Price Band: Rs 100"),
+        (13, "to Rs 105 per share."),
+    )
+    squashed = tuple((n, squash(t)) for n, t in pages)
+    assert page_of(squash("Price Band: Rs 100 to Rs 105"), squashed) == 12
+    assert page_of(squash("Rs 105 per share"), squashed) == 13
+    assert page_of(squash("not in the document"), squashed) is None
+    assert page_of("", squashed) is None
 
 
 def test_unverified_quote_has_no_page() -> None:

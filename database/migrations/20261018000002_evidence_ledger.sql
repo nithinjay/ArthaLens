@@ -34,6 +34,44 @@ CREATE TABLE evidence_passages (
 CREATE UNIQUE INDEX evidence_passages_position_key
   ON evidence_passages (content_sha256, coalesce(page_number, 0), passage_index);
 
+-- Canonical source key. Must match ai/arthalens_ai/evidence/canonical.py exactly; the shared
+-- vectors in ai/tests/test_evidence_integration.py check both. Rules: lower-case scheme and
+-- host, drop trailing dot, userinfo, default port and fragment; empty path -> "/"; drop empty,
+-- utm_* and tracking query parameters; sort the rest as raw "k=v" strings (byte order).
+CREATE FUNCTION canonical_source_key(url text) RETURNS text
+LANGUAGE plpgsql IMMUTABLE STRICT AS $$
+DECLARE
+  m text[];
+  scheme text;
+  host text;
+  port text;
+  path text;
+  query text;
+BEGIN
+  m := regexp_match(btrim(url),
+    '^([A-Za-z][A-Za-z0-9+.-]*)://(?:[^@/?#]*@)?([^:/?#]*)(?::([0-9]*))?([^?#]*)(?:\?([^#]*))?(?:#.*)?$');
+  IF m IS NULL THEN
+    RETURN NULL;
+  END IF;
+  scheme := lower(m[1]);
+  host := rtrim(lower(m[2]), '.');
+  IF scheme NOT IN ('http', 'https') OR host = '' THEN
+    RETURN NULL;
+  END IF;
+  port := nullif(m[3], '');
+  IF port IS NOT NULL AND port::integer = (CASE scheme WHEN 'https' THEN 443 ELSE 80 END) THEN
+    port := NULL;
+  END IF;
+  path := CASE WHEN coalesce(m[4], '') = '' THEN '/' ELSE m[4] END;
+  SELECT string_agg(pair, '&' ORDER BY pair COLLATE "C") INTO query
+    FROM unnest(string_to_array(coalesce(m[5], ''), '&')) AS pair
+   WHERE pair <> ''
+     AND lower(split_part(pair, '=', 1)) NOT LIKE 'utm\_%'
+     AND lower(split_part(pair, '=', 1)) NOT IN ('fbclid', 'gclid', 'mc_cid', 'mc_eid', 'ref', 'ref_src');
+  RETURN scheme || '://' || host || coalesce(':' || port, '') || path || coalesce('?' || query, '');
+END;
+$$;
+
 -- Backfill contents and passages from Milestone 2 documents before reshaping the table.
 INSERT INTO evidence_contents (sha256, mime_type, byte_size, extraction_method, extractor_version)
 SELECT DISTINCT ON (content_sha256) content_sha256, mime_type, byte_size,
@@ -42,31 +80,52 @@ SELECT DISTINCT ON (content_sha256) content_sha256, mime_type, byte_size,
   FROM evidence_documents
  ORDER BY content_sha256, created_at;
 
+-- Milestone 2 kept one text blob per document, without pages. Split it into passages of at
+-- most 4000 characters so nothing is lost (page_number stays NULL: the pages are unknown).
 INSERT INTO evidence_passages (content_sha256, page_number, passage_index, text, extraction)
-SELECT DISTINCT ON (content_sha256) content_sha256, NULL::integer, 0, left(text_content, 4000), 'text'
-  FROM evidence_documents
- ORDER BY content_sha256, created_at;
+SELECT d.content_sha256, NULL::integer, n - 1, substr(d.text_content, (n - 1) * 4000 + 1, 4000), 'text'
+  FROM (SELECT DISTINCT ON (content_sha256) content_sha256, text_content
+          FROM evidence_documents ORDER BY content_sha256, created_at) AS d
+ CROSS JOIN LATERAL generate_series(1, greatest(1, ceil(length(d.text_content) / 4000.0)::integer)) AS n;
 
 ALTER TABLE evidence_documents
   ADD COLUMN source_key     text,
-  ADD COLUMN version        integer NOT NULL DEFAULT 1 CHECK (version >= 1),
+  ADD COLUMN version        integer,
   ADD COLUMN supersedes_id  uuid REFERENCES evidence_documents (id),
   ADD COLUMN visibility     text NOT NULL DEFAULT 'public' CHECK (visibility IN ('public', 'tenant')),
   ADD COLUMN tenant_id      uuid REFERENCES tenants (id);
 
-UPDATE evidence_documents SET source_key = canonical_url;
+-- Milestone 2 allowed several contents per URL. They become versions in retrieval order, each
+-- superseding the one before.
+WITH keyed AS (
+  SELECT id, coalesce(canonical_source_key(canonical_url), canonical_url) AS k,
+         row_number() OVER w AS v, lag(id) OVER w AS prev
+    FROM evidence_documents
+  WINDOW w AS (PARTITION BY coalesce(canonical_source_key(canonical_url), canonical_url)
+               ORDER BY retrieved_at, created_at, id)
+)
+UPDATE evidence_documents d SET source_key = keyed.k, version = keyed.v, supersedes_id = keyed.prev
+  FROM keyed WHERE keyed.id = d.id;
 
 ALTER TABLE evidence_documents
   ALTER COLUMN source_key SET NOT NULL,
-  ALTER COLUMN version DROP DEFAULT,
+  ALTER COLUMN version SET NOT NULL,
+  ADD CONSTRAINT evidence_documents_version_check CHECK (version >= 1),
   ADD CONSTRAINT evidence_documents_content_fkey
     FOREIGN KEY (content_sha256) REFERENCES evidence_contents (sha256),
   ADD CONSTRAINT evidence_documents_tenant_iff_private
     CHECK ((visibility = 'tenant') = (tenant_id IS NOT NULL)),
+  -- Tenant documents live in their tenant's key namespace, so a tenant's copy of a URL can
+  -- never collide with (or reveal itself to) the public version chain of that URL.
+  ADD CONSTRAINT evidence_documents_key_namespace CHECK (
+    CASE visibility
+      WHEN 'public' THEN source_key !~ '^(upload|tenant):'
+      ELSE source_key LIKE 'upload:' || tenant_id::text || ':%'
+        OR source_key LIKE 'tenant:' || tenant_id::text || ':%'
+    END),
+  -- Versions are a timeline per source: v1, v2, ... A reverted document gets a new version.
   ADD CONSTRAINT evidence_documents_version_key UNIQUE (source_key, version),
-  -- Same source, same bytes -> same document (de-duplication).
-  ADD CONSTRAINT evidence_documents_source_content_key UNIQUE (source_key, content_sha256),
-  ADD CONSTRAINT evidence_documents_supersedes_older CHECK (supersedes_id IS NULL OR version > 1),
+  ADD CONSTRAINT evidence_documents_supersedes_older CHECK ((supersedes_id IS NULL) = (version = 1)),
   DROP CONSTRAINT evidence_documents_content_url_key,
   DROP COLUMN text_content,
   DROP COLUMN mime_type,
@@ -319,6 +378,20 @@ DROP POLICY evidence_documents_read ON evidence_documents;
 DROP POLICY evidence_documents_write ON evidence_documents;
 ALTER TABLE evidence_documents DISABLE ROW LEVEL SECURITY;
 
+-- Refuse to roll back data the Milestone 2 shape can't represent safely: it has no notion of
+-- tenant-private evidence (rolling back would make it public) and allows only one document
+-- per (content, URL). Deleting rows instead would break foreign keys and lose evidence.
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM evidence_documents WHERE visibility = 'tenant') THEN
+    RAISE EXCEPTION 'cannot roll back: tenant-private evidence exists and would become public';
+  END IF;
+  IF EXISTS (SELECT 1 FROM evidence_documents GROUP BY content_sha256, canonical_url HAVING count(*) > 1) THEN
+    RAISE EXCEPTION 'cannot roll back: a source has repeated content across versions';
+  END IF;
+END;
+$$;
+
 ALTER TABLE evidence_documents
   ADD COLUMN text_content text,
   ADD COLUMN mime_type text,
@@ -326,10 +399,12 @@ ALTER TABLE evidence_documents
 UPDATE evidence_documents d SET
   mime_type = c.mime_type,
   byte_size = c.byte_size,
-  text_content = coalesce((SELECT string_agg(p.text, E'\n' ORDER BY coalesce(p.page_number, 0), p.passage_index)
+  -- Chunks backfilled from one Milestone 2 text blob rejoin exactly; real passages by newline.
+  text_content = coalesce((SELECT string_agg(p.text,
+                                    CASE c.extractor_version WHEN 'm2-backfill' THEN '' ELSE E'\n' END
+                                    ORDER BY coalesce(p.page_number, 0), p.passage_index)
                              FROM evidence_passages p WHERE p.content_sha256 = c.sha256), '')
   FROM evidence_contents c WHERE c.sha256 = d.content_sha256;
-DELETE FROM evidence_documents WHERE version > 1;  -- M2 had no versions
 ALTER TABLE evidence_documents
   ALTER COLUMN text_content SET NOT NULL,
   ALTER COLUMN mime_type SET NOT NULL,
@@ -337,7 +412,7 @@ ALTER TABLE evidence_documents
   ADD CONSTRAINT evidence_documents_byte_size_check CHECK (byte_size >= 0),
   ADD CONSTRAINT evidence_documents_content_url_key UNIQUE (content_sha256, canonical_url),
   DROP CONSTRAINT evidence_documents_content_fkey,
-  DROP CONSTRAINT evidence_documents_source_content_key,
+  DROP CONSTRAINT evidence_documents_key_namespace,
   DROP CONSTRAINT evidence_documents_version_key,
   DROP COLUMN source_key,
   DROP COLUMN version,
@@ -354,3 +429,4 @@ GRANT SELECT (id, canonical_url, title, publisher, published_at, retrieved_at, s
 DROP TABLE evidence_retrievals;
 DROP TABLE evidence_passages;
 DROP TABLE evidence_contents;
+DROP FUNCTION canonical_source_key(text);
