@@ -1,0 +1,106 @@
+/* Minimal base styles. The component library and design system arrive in Milestone 6 (ADR-0013). */
+:root {
+  --bg: #ffffff;
+  --fg: #1a1f2b;
+  --muted: #5b6475;
+  --border: #d8dce4;
+  --ok: #1b7f3b;
+  --degraded: #a35c00;
+  --down: #b42318;
+  --notice-bg: #f3f5f9;
+  color-scheme: light dark;
+  font-family:
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    Roboto,
+    sans-serif;
+  line-height: 1.5;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #12151c;
+    --fg: #e7eaf0;
+    --muted: #a3abba;
+    --border: #2c3240;
+    --ok: #4ccb7a;
+    --degraded: #f0a43a;
+    --down: #ff7a6e;
+    --notice-bg: #1b2030;
+  }
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+}
+
+.app-header,
+main {
+  max-width: 48rem;
+  margin: 0 auto;
+  padding: 1rem;
+}
+
+.app-header h1 {
+  margin-bottom: 0;
+}
+
+.muted {
+  color: var(--muted);
+}
+
+.notice {
+  background: var(--notice-bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.75rem 1rem;
+}
+
+.status {
+  border: 1px solid var(--border);
+  border-left-width: 4px;
+  border-radius: 6px;
+  padding: 0.25rem 1rem;
+}
+
+.status--ok {
+  border-left-color: var(--ok);
+}
+.status--degraded {
+  border-left-color: var(--degraded);
+}
+.status--down {
+  border-left-color: var(--down);
+}
+
+.status ul {
+  list-style: none;
+  padding: 0;
+}
+
+.dot {
+  display: inline-block;
+  width: 0.6rem;
+  height: 0.6rem;
+  border-radius: 50%;
+  margin-right: 0.5rem;
+}
+.dot--ok {
+  background: var(--ok);
+}
+.dot--down {
+  background: var(--down);
+}
+
+button {
+  font: inherit;
+  padding: 0.4rem 0.9rem;
+}
+
+:focus-visible {
+  outline: 3px solid var(--degraded);
+  outline-offset: 2px;
+}

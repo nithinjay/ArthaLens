@@ -1,0 +1,25 @@
+{
+  "name": "@arthalens/contracts",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Generated contract types and JSON Schemas. Source of truth: Pydantic models in ai/arthalens_ai/contracts.",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "schemas"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "echo 'contracts: covered by ai/tests/test_contracts.py and backend tests'"
+  },
+  "devDependencies": {
+    "typescript": "6.0.3"
+  }
+}

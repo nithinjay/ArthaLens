@@ -170,7 +170,7 @@ Data classification:
 
 ## 5. Deployment views
 
-**Local (Milestone 1):** Docker Compose runs `postgres` (with pgvector image, extension enabled only when needed), `api`, `ai-api` (FastAPI, health + internal endpoints), `ai-worker` (same image, worker entrypoint), `web` (Vite dev server), and `minio` (object store, optional profile). No Redis. Mock providers are on by default, and live providers need explicit env flags.
+**Local (implemented in Milestone 1):** Docker Compose runs `postgres` (17, roles created on first start), `migrate` (one-shot dbmate job), `ai` (FastAPI), `backend` (Fastify) and `frontend` (nginx serving the build and proxying `/api`). All ports bind to 127.0.0.1. No Redis. `ai-worker` joins in M4 and object storage when source snapshots are stored ([ADR-0014](../decisions/0014-milestone-1-implementation-refinements.md)). Mock providers will be on by default, with live providers behind explicit env flags.
 
 **Production (Milestone 11):** container images → private registry; Helm chart; Terraform for managed Postgres, object storage, secret manager, and egress firewall (allowlist). API is horizontally scaled behind a load balancer. AI workers scale on queue depth. A Redis tier is added only if measured rate-limit or cache contention justifies it ([ADR-0004](../decisions/0004-postgres-and-job-queue.md)).
 
@@ -214,20 +214,22 @@ ArthaLens/
 └── README.md
 ```
 
-## 7. Planned development commands (to be made real in Milestone 1)
+## 7. Development commands
 
-These are **targets**, not working commands yet:
+Implemented in Milestone 1. The full guide is in [../runbooks/local-development.md](../runbooks/local-development.md).
 
 | Purpose | Command |
 |---|---|
-| Install | `pnpm install` (frontend, backend, packages) · `uv sync --project ai` |
-| Start everything | `docker compose up --build` |
-| DB migrate | `pnpm db:migrate` (wraps `dbmate up`) |
-| Health | `curl localhost:3000/healthz` · `curl localhost:8000/healthz` |
-| TS checks | `pnpm -r typecheck` · `pnpm -r lint` · `pnpm -r test` |
-| Python checks | `uv run ruff check` · `uv run mypy` · `uv run pytest` |
-| Exclusion tests (both languages) | `pnpm test:policy` · `uv run pytest -m policy` |
-| Generate contracts | `pnpm contracts:gen` |
+| Install | `corepack enable pnpm` · `pnpm install` · `uv sync --project ai` |
+| Create local secrets | `pnpm env:init` |
+| Start everything | `docker compose up --build -d` |
+| End-to-end check | `pnpm smoke` |
+| Health | `curl localhost:3000/readyz` · `curl localhost:8000/readyz` |
+| TS checks | `pnpm typecheck` · `pnpm lint` · `pnpm test` |
+| Python checks | `cd ai && uv run ruff check . && uv run mypy arthalens_ai tests && uv run pytest` |
+| Migration roundtrip | `sh scripts/check-migrations.sh` |
+| Generate / check contracts | `pnpm contracts:gen` · `pnpm contracts:check` |
+| Secret scan | `pnpm secrets:scan` |
 
 ## 8. Why a hybrid TypeScript + Python design
 

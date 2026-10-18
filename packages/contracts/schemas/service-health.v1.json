@@ -1,0 +1,99 @@
+{
+  "$defs": {
+    "DependencyCheck": {
+      "additionalProperties": false,
+      "description": "Result of checking one dependency (database, another service, ...).",
+      "properties": {
+        "detail": {
+          "anyOf": [
+            {
+              "maxLength": 200,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Detail"
+        },
+        "latency_ms": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Latency Ms"
+        },
+        "status": {
+          "enum": [
+            "ok",
+            "down"
+          ],
+          "title": "Status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "status",
+        "latency_ms",
+        "detail"
+      ],
+      "title": "DependencyCheck",
+      "type": "object"
+    }
+  },
+  "$id": "https://arthalens.local/schemas/service-health.v1.json",
+  "additionalProperties": false,
+  "description": "Liveness/readiness report for one service.",
+  "properties": {
+    "checks": {
+      "additionalProperties": {
+        "$ref": "#/$defs/DependencyCheck"
+      },
+      "title": "Checks",
+      "type": "object"
+    },
+    "schema_version": {
+      "const": "service-health.v1",
+      "default": "service-health.v1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "service": {
+      "enum": [
+        "backend",
+        "ai"
+      ],
+      "title": "Service",
+      "type": "string"
+    },
+    "status": {
+      "enum": [
+        "ok",
+        "degraded",
+        "down"
+      ],
+      "title": "Status",
+      "type": "string"
+    },
+    "version": {
+      "title": "Version",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_version",
+    "service",
+    "status",
+    "version",
+    "checks"
+  ],
+  "title": "ServiceHealth",
+  "type": "object"
+}

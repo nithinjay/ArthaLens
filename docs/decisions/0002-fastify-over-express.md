@@ -1,6 +1,6 @@
 # ADR-0002: Fastify for the application API
 
-**Status:** Proposed · **Date:** 2026-10-17
+**Status:** Accepted · **Date:** 2026-10-17
 
 ## Context
 The brief asks for Express or Fastify with Zod validation, OpenAPI, centralised errors, auth, and rate limiting.

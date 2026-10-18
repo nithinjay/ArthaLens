@@ -1,6 +1,6 @@
 # ADR-0007: Contract source of truth and code generation
 
-**Status:** Proposed · **Date:** 2026-10-17
+**Status:** Accepted · **Date:** 2026-10-17
 
 ## Context
 Two languages exchange typed data: job payloads, report/section/claim/evidence shapes, and events. Hand-maintained duplicate types will drift.

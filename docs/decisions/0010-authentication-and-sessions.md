@@ -1,6 +1,6 @@
 # ADR-0010: Server-side sessions behind an IdentityProvider port
 
-**Status:** Proposed · **Date:** 2026-10-17
+**Status:** Accepted · **Date:** 2026-10-17
 
 ## Context
 Phase 1 needs authentication. Phase 3/Stage 1 needs OAuth 2.0/OIDC, SAML, SCIM, and tenant-specific IdP config. The brief forbids presenting a simulated bridge as production SSO.

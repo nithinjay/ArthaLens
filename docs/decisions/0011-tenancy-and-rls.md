@@ -1,6 +1,6 @@
 # ADR-0011: Tenant isolation with tenant_id + Postgres RLS
 
-**Status:** Proposed · **Date:** 2026-10-17
+**Status:** Accepted · **Date:** 2026-10-17
 
 ## Decision
 - Every tenant-owned table has `tenant_id NOT NULL` (and `owner_user_id` where per-user). Composite indexes lead with `tenant_id`.
